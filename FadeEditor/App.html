@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<link rel="stylesheet" href="bootstrap/css/bootstrap.min.css" type="text/css" media="screen" charset="utf-8">
+<style>
+.centerbox {
+  display: -webkit-box;
+  -webkit-box-orient: horizontal;
+  -webkit-box-pack: center;
+  -webkit-box-align: center;
+
+
+  width: 100%;
+  height: 100%;
+  margin: 0; padding: 0;
+}
+body, html { width: 100%; height: 100%; padding: 0; margin: 0; }
+canvas {
+  border-radius: 6px;
+  box-shadow: 0 0 6px #777;
+}
+body {
+  background-color: #eee;
+}
+
+.context-menu {
+	position: absolute;
+	background-color: #EEE;
+	border: 1px solid black;
+	border-radius: 0px 10px 10px 10px;
+	padding: 4px;
+	
+	opacity: 0.9;
+	-moz-opacity: 0.9;
+	filter:alpha(opacity=90);
+}
+
+.menu-item {
+	cursor: pointer;
+	margin-left: 1px;
+	padding-left: 5px;
+	padding-right: 5px;
+	border-radius: 5px;
+}
+
+.menu-item:hover {
+	background-color: #ccc;
+}
+</style>
+<div class="centerbox"><canvas></canvas></div>
+<div class="context-menu">
+	<ul>
+		<li class="menu-item" id="item-smooth-node" style="list-style:disc;color:#0f0"><span style="color:black">Smooth</span></li>
+		<li class="menu-item" id="item-sharp-node" style="list-style:square;color:#f00"><span style="color:black">Sharp</span></li>
+	</ul>
+</div>
+<script src="jquery.js"></script>
+<script src="bootstrap/js/bootstrap.min.js"></script>
+<script src="core.js"></script>
+<script src="math.js"></script>
+<script src="app.js"></script>
