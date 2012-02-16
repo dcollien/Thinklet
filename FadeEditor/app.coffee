@@ -26,16 +26,29 @@ class ControlNode
 		
 	smooth: ->
 		coord = v @
-		otherCPNode = @parentNode.getControlNode @oppositeType( )
-		if otherCPNode
-			# otherCPNode:
+		
+		# fetch the opposite control node
+		otherNode = @parentNode.getControlNode @oppositeType( )
+		if otherNode and (v.sub @parentNode, @).len( ) > 0
+			# doing stuff to the other control node:
+			
+			# the angle of this control node to the parent
+			# (i.e. the direction the opposite control point should face)
 			newParentAngle = (v.sub @parentNode, coord).angle( )
-			currParentVect = v.sub @parentNode, otherCPNode
+			
+			# the distance of the opposite node from the parent
+			distance = (v.sub @parentNode, otherNode).len( )
+			
+			# make a new vector of the desired angle
+			# and lengthen it to the original distance
 			newUnitVect = v.forAngle newParentAngle
-			newVectFromParent = v.mul newUnitVect, currParentVect.len( )
+			newVectFromParent = v.mul newUnitVect, distance
+			
+			# translate back to original coordinate system
 			newVect = v.add @parentNode, newVectFromParent
 			
-			otherCPNode.moveTo newVect
+			# move the opposite control point to its new location
+			otherNode.moveTo newVect
 			
 	moveTo: (coord) ->
 		coord = @constrain coord
@@ -50,6 +63,7 @@ class CurveNode
 		@controlLeft = new ControlNode( leftCP, @, 'left' ) if leftCP
 		@controlRight = new ControlNode( rightCP, @, 'right' ) if rightCP
 		
+		# smooth points are the default
 		@style = 'smooth'
 		
 		@next = null
@@ -63,25 +77,32 @@ class CurveNode
 	
 	smooth: ->
 		if @controlLeft and @controlRight
+			# vectors from this parent node to the control points
 			leftOffset  = (v.sub @, @controlLeft)
 			rightOffset = (v.sub @, @controlRight)
-		
+	
+			# unit vectors of the above
 			leftUnit  = v.unit leftOffset
 			rightUnit = v.unit rightOffset
 		
+			# the vectors joining the control points in either direction, normalised
 			leftVect  = v.unit (v.sub rightUnit, leftUnit)
 			rightVect = v.unit (v.sub leftUnit, rightUnit)
 		
+			# the above vectors sized to their original lengths
 			leftVect  = v.mul leftVect, leftOffset.len( )
 			rightVect = v.mul rightVect, rightOffset.len( )
 		
+			# back to the original coordinate system
 			leftVect  = (v.add @, leftVect)
 			rightVect = (v.add @, rightVect)
 	
+			# move the control points to their new positions
 			@controlLeft.moveTo leftVect
 			@controlRight.moveTo rightVect
-		
-			# double-ensure smoothing
+			
+			# double-ensure smoothing from one of the control points
+			# (in case something was screwed up by constraints)
 			@controlRight.smooth( )
 		
 		
@@ -105,7 +126,7 @@ class CurveNode
 		# update movement vector with constrained values
 		nodeMove = v.sub coord, @
 		
-		# move control points with the curve
+		# move control points with the moving of the curve
 		if @controlLeft
 			@controlLeft.moveTo (v.add @controlLeft, nodeMove)
 			
@@ -147,24 +168,29 @@ class Curve
 		c2 = end.controlLeft
 		ctx.lineWidth = 2
 		ctx.strokeStyle = @color
+		
 		ctx.beginPath( )
 		ctx.moveTo start.x, start.y
 		ctx.bezierCurveTo c1.x, c1.y, c2.x, c2.y, end.x, end.y
+		
 		ctx.stroke( )
 	
 	drawControlLine: (from, to) ->
 		ctx.lineWidth = 1
 		ctx.strokeStyle = "rgb(127,127,127)"
+		
 		ctx.beginPath( )
 		ctx.moveTo from.x, from.y
 		ctx.lineTo to.x, to.y
+		
 		ctx.stroke( )
-
+		
 		offset = 3
 
 		ctx.lineWidth = 2
 		ctx.strokeStyle = "rgb(63,63,63)"
 		ctx.fillStyle = "rgb(195,195,195)"
+		
 		ctx.beginPath( )
 		ctx.moveTo to.x-offset, to.y
 		ctx.lineTo to.x, to.y-offset
@@ -172,6 +198,7 @@ class Curve
 		ctx.lineTo to.x, to.y+offset
 		ctx.lineTo to.x-offset, to.y
 		ctx.closePath( )
+		
 		ctx.stroke( )
 		ctx.fill( )
 		
@@ -188,6 +215,7 @@ class Curve
 			ctx.lineWidth = 2
 			ctx.fillStyle = "rgb(255,0,0)"
 			ctx.strokeStyle = "rgb(63,63,63)"
+			
 			ctx.beginPath( )
 			ctx.strokeRect x-offset, y-offset, offset*2, offset*2
 			ctx.fillRect x-offset, y-offset, offset*2, offset*2
@@ -196,13 +224,17 @@ class Curve
 			ctx.lineWidth = 2
 			ctx.fillStyle = "rgb(0,255,0)"
 			ctx.strokeStyle = "rgb(63,63,63)"
+			
 			ctx.beginPath( )
 			ctx.arc x, y, radius, 0, TAU
 			ctx.closePath( )
+			
 			ctx.stroke( )
 			ctx.fill( )
 
 	getNodes: ->
+		# get an array of the nodes 
+		# from the linked list representation
 		nodes = []
 		currNode = @firstNode
 		while currNode != null
@@ -244,8 +276,6 @@ class Curve
 			return node if dist < radius
 		return null
 
-# TODO: break into Pattern and App
-# curve is linked list
 class App extends core.App
 	constructor: ->
 		super( )
@@ -265,7 +295,9 @@ class App extends core.App
 		@dragControl = null
 
 
-	doDragging: (dt) ->
+	updateDragging: (dt) ->
+		# handle the dragging parts of the update
+		
 		if @dragPan
 			mouse = core.canvasMouse( )
 			
@@ -288,14 +320,14 @@ class App extends core.App
 			@dragControl.moveTo mouse
 			
 			if @dragControl.parentNode.style == 'smooth'
+				# constrain the smoothness of this node
 				@dragControl.smooth( )
 			
 			@invalidate( )
-		
-	updateCurve: ->
-		#@curve.update( )
 
-	update:( dt ) ->				
+	update:( dt ) ->	
+		
+		# keys do panning	at the moment
 		if core.input.down 'pan-left'
 			@pan.x -= @panSpeed
 			@invalidate( )	
@@ -310,6 +342,7 @@ class App extends core.App
 			@pan.y += @panSpeed
 			@invalidate( )
 			
+		# register the different start-drags
 		if core.input.pressed 'left-mouse'
 			$('.context-menu').fadeOut( 'fast' )
 			
@@ -319,22 +352,30 @@ class App extends core.App
 			if not @dragNode and not @dragControl
 				@dragPan = v core.canvasMouse( )
 				
-			
-		if not core.input.down 'left-mouse'
+		# stop dragging	
+		#if not core.input.down 'left-mouse'
+		if core.input.released 'left-mouse'
 			@dragNode = null
 			@dragControl = null
 			@dragPan = null
-			
+		
+		# right click
 		if core.input.pressed 'right-mouse'
 			node = @curve.nodeAtMouse @pan
 			if node
+				# pop up a context menu on the selected node
+				
 				menuPos = v.add (core.toGlobal node), @pan
 				menu = $('.context-menu')
+				
+				# make the menu's data reference the clicked node
+				# to let menu selection affect this node
 				menu.data { node: node }
+				
 				menu.fadeIn 'fast'
 				menu.offset { top: menuPos.y, left: menuPos.x }
 			
-		@doDragging dt
+		@updateDragging dt
 				
 	drawGrid: ->
 		gridSize = 10
@@ -346,6 +387,8 @@ class App extends core.App
 		
 		minCol = -1
 		maxCol = 1 + Math.floor(@width/gridSize)
+		
+		# repeat an infinite grid shifting by the @pan % gridSize
 		
 		for row in [minRow..maxRow]
 			minX = (minCol * gridSize) + @pan.x % gridSize
@@ -396,6 +439,7 @@ core.input.bind core.button.LEFT, 'left-mouse'
 app = new App( )
 app.run( )
 
+# clicking on the context menu items
 $('#item-smooth-node').click ->
 	data = $('.context-menu').data( )
 

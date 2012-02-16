@@ -38,16 +38,16 @@ ControlNode = (function() {
   };
 
   ControlNode.prototype.smooth = function() {
-    var coord, currParentVect, newParentAngle, newUnitVect, newVect, newVectFromParent, otherCPNode;
+    var coord, distance, newParentAngle, newUnitVect, newVect, newVectFromParent, otherNode;
     coord = v(this);
-    otherCPNode = this.parentNode.getControlNode(this.oppositeType());
-    if (otherCPNode) {
+    otherNode = this.parentNode.getControlNode(this.oppositeType());
+    if (otherNode && (v.sub(this.parentNode, this)).len() > 0) {
       newParentAngle = (v.sub(this.parentNode, coord)).angle();
-      currParentVect = v.sub(this.parentNode, otherCPNode);
+      distance = (v.sub(this.parentNode, otherNode)).len();
       newUnitVect = v.forAngle(newParentAngle);
-      newVectFromParent = v.mul(newUnitVect, currParentVect.len());
+      newVectFromParent = v.mul(newUnitVect, distance);
       newVect = v.add(this.parentNode, newVectFromParent);
-      return otherCPNode.moveTo(newVect);
+      return otherNode.moveTo(newVect);
     }
   };
 
@@ -301,7 +301,7 @@ App = (function(_super) {
     this.dragControl = null;
   }
 
-  App.prototype.doDragging = function(dt) {
+  App.prototype.updateDragging = function(dt) {
     var diff, mouse;
     if (this.dragPan) {
       mouse = core.canvasMouse();
@@ -322,8 +322,6 @@ App = (function(_super) {
       return this.invalidate();
     }
   };
-
-  App.prototype.updateCurve = function() {};
 
   App.prototype.update = function(dt) {
     var menu, menuPos, node;
@@ -349,7 +347,7 @@ App = (function(_super) {
         this.dragPan = v(core.canvasMouse());
       }
     }
-    if (!core.input.down('left-mouse')) {
+    if (core.input.released('left-mouse')) {
       this.dragNode = null;
       this.dragControl = null;
       this.dragPan = null;
@@ -369,7 +367,7 @@ App = (function(_super) {
         });
       }
     }
-    return this.doDragging(dt);
+    return this.updateDragging(dt);
   };
 
   App.prototype.drawGrid = function() {

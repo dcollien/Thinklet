@@ -38,6 +38,7 @@ core.input = {
 
 	pressed: (action) -> @_pressed[action]
 	down: (action) -> @_down[action]
+	released: (action) -> (action in @_released)
 
 	onmousemove: (e) ->
 		@mouse.x = e.pageX - core.canvas.offsetLeft
@@ -135,9 +136,9 @@ core.canvas.onmouseup = core.input.onmouseup.bind core.input
 core.canvas.onmousewheel = core.input.onmousewheel.bind core.input
 core.canvas.oncontextmenu = core.input.oncontextmenu.bind core.input
 
-document.onkeydown = (args...) -> core.input.onkeydown args...
-document.onkeyup = (args...) -> core.input.onkeyup args...
-document.onmouseup = (args...) -> core.input.onmouseup args...
+document.onkeydown = core.input.onkeydown.bind core.input
+document.onkeyup = core.input.onkeyup.bind core.input
+document.onmouseup = core.input.onmouseup.bind core.input
 
 requestAnimationFrame = window.requestAnimationFrame or
 	window.webkitRequestAnimationFrame or

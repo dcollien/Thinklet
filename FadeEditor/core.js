@@ -1,5 +1,5 @@
 var App, ascii, c, core, requestAnimationFrame, _base, _ref, _ref2,
-  __slice = Array.prototype.slice;
+  __indexOf = Array.prototype.indexOf || function(item) { for (var i = 0, l = this.length; i < l; i++) { if (i in this && this[i] === item) return i; } return -1; };
 
 if ((_base = Function.prototype).bind == null) {
   _base.bind = function(new_this) {
@@ -56,6 +56,9 @@ core.input = {
   },
   down: function(action) {
     return this._down[action];
+  },
+  released: function(action) {
+    return __indexOf.call(this._released, action) >= 0;
   },
   onmousemove: function(e) {
     this.mouse.x = e.pageX - core.canvas.offsetLeft;
@@ -192,23 +195,11 @@ core.canvas.onmousewheel = core.input.onmousewheel.bind(core.input);
 
 core.canvas.oncontextmenu = core.input.oncontextmenu.bind(core.input);
 
-document.onkeydown = function() {
-  var args, _ref3;
-  args = 1 <= arguments.length ? __slice.call(arguments, 0) : [];
-  return (_ref3 = core.input).onkeydown.apply(_ref3, args);
-};
+document.onkeydown = core.input.onkeydown.bind(core.input);
 
-document.onkeyup = function() {
-  var args, _ref3;
-  args = 1 <= arguments.length ? __slice.call(arguments, 0) : [];
-  return (_ref3 = core.input).onkeyup.apply(_ref3, args);
-};
+document.onkeyup = core.input.onkeyup.bind(core.input);
 
-document.onmouseup = function() {
-  var args, _ref3;
-  args = 1 <= arguments.length ? __slice.call(arguments, 0) : [];
-  return (_ref3 = core.input).onmouseup.apply(_ref3, args);
-};
+document.onmouseup = core.input.onmouseup.bind(core.input);
 
 requestAnimationFrame = window.requestAnimationFrame || window.webkitRequestAnimationFrame || window.mozRequestAnimationFrame || window.oRequestAnimationFrame || window.msRequestAnimationFrame || function(callback) {
   return window.setTimeout(callback, 1000 / 60);
