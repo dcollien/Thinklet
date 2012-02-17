@@ -1,4 +1,4 @@
-var TAU, Vect, cube, lerp, rand, randInt, sq, v, vary;
+var TAU, Vect, cube, cubicBezier, cubicBezierAtX, cubicDeCasteljau, lerp, rand, randInt, sq, v, vary;
 
 TAU = Math.PI * 2;
 
@@ -24,6 +24,45 @@ sq = function(x) {
 
 cube = function(x) {
   return x * x * x;
+};
+
+cubicBezier = function(t, p0, p1, p2, p3) {
+  var q0, q1, q2, q3;
+  q0 = v.mul(p0, cube(1 - t));
+  q1 = v.mul(p1, 3 * (sq(1 - t)) * t);
+  q2 = v.mul(p2, 3 * (1 - t) * (sq(t)));
+  q3 = v.mul(p3, cube(t));
+  return v.add(v.add(v.add(q0, q1), q2), q3);
+};
+
+cubicBezierAtX = function(x, p0, p1, p2, p3, tolerance) {
+  var lower, result, t, upper;
+  if (!tolerance) tolerance = 0.1;
+  t = 0.5;
+  lower = 0.0;
+  upper = 1.0;
+  result = cubicBezier(t, p0, p1, p2, p3);
+  while ((Math.abs(result.x - x)) > tolerance) {
+    if (result.x < x) {
+      lower = t;
+      t = lerp(0.5, t, upper);
+    } else {
+      upper = t;
+      t = lerp(0.5, t, lower);
+    }
+    result = cubicBezier(t, p0, p1, p2, p3);
+  }
+  return t;
+};
+
+cubicDeCasteljau = function(t, p0, p1, p2, p3) {
+  var q0, q1, q2, r0, r1;
+  q0 = v.lerp(t, p0, p1);
+  q1 = v.lerp(t, p1, p2);
+  q2 = v.lerp(t, p2, p3);
+  r0 = v.lerp(t, q0, q1);
+  r1 = v.lerp(t, q1, q2);
+  return [r0, r1, q0, q2];
 };
 
 Vect = function(x, y) {
@@ -75,4 +114,12 @@ v.unit = function(v1) {
   var len;
   len = v1.len();
   return v(v1.x / len, v1.y / len);
+};
+
+v.lerp = function(t, v1, v2) {
+  return v(lerp(t, v1.x, v2.x), lerp(t, v1.y, v2.y));
+};
+
+v.eq = function(v1, v2) {
+  return v1.x === v2.x && v1.y === v2.y;
 };

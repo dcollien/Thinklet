@@ -1,10 +1,40 @@
 canvas = core.canvas
 ctx = core.ctx
 
+class DisectionNode
+	constructor: ->
+		@radius = 2
+		@clickRadius = 4
+		@coord = null
+		@bezierParameter
+	draw: ->
+		if @coord
+			coord = @coord
+			offset = @radius
+			ctx.fillStyle = "rgba(255,255,255, 0.5)"
+			ctx.strokeStyle = "rgb(0,0,0)"
+			ctx.beginPath( )
+			ctx.arc coord.x, coord.y, @radius, 0, TAU
+			ctx.fill( )
+			
+	move: (x, firstNode) ->
+		currNode = firstNode
+		@coord = null
+		while currNode != null and currNode.next != null
+			if x > currNode.x and x < currNode.next.x
+				@bezierParameter = cubicBezierAtX x, currNode, currNode.controlRight, currNode.next.controlLeft, currNode.next
+				@coord = cubicBezier @bezierParameter, currNode, currNode.controlRight, currNode.next.controlLeft, currNode.next
+				break
+			currNode = currNode.next
+	isUnderMouse: (pan) ->
+		mouse = v.sub core.canvasMouse( ), pan
+		return false if not @coord
+		return (v.sub mouse, @coord).len( ) < @clickRadius
 
 class ControlNode
 	constructor: (coord, @parentNode, @type) ->
 		@moveTo coord
+		@isSelected = false
 		
 	oppositeType: ->
 		if @type == 'left'
@@ -22,6 +52,12 @@ class ControlNode
 			coord.x = @parentNode.x if coord.x < @parentNode.x
 			coord.x = @parentNode.next.x if @parentNode.next and coord.x > @parentNode.next.x
 		
+		# constrain control points to stay within the vertical bounds
+		if coord.y < @parentNode.curve.topOffset
+			coord.y = @parentNode.curve.topOffset
+		else if coord.y > @parentNode.curve.topOffset + @parentNode.curve.height
+			coord.y = @parentNode.curve.topOffset + @parentNode.curve.height
+			
 		return coord
 		
 	smooth: ->
@@ -29,7 +65,7 @@ class ControlNode
 		
 		# fetch the opposite control node
 		otherNode = @parentNode.getControlNode @oppositeType( )
-		if otherNode and (v.sub @parentNode, @).len( ) > 0
+		if otherNode and (v.sub @parentNode, @).len( ) > 0			
 			# doing stuff to the other control node:
 			
 			# the angle of this control node to the parent
@@ -52,13 +88,14 @@ class ControlNode
 			
 	moveTo: (coord) ->
 		coord = @constrain coord
-				
+		
 		@x = coord.x
 		@y = coord.y
 
 class CurveNode
-	constructor: (coord, leftCP, rightCP) ->
+	constructor: (@curve, coord, leftCP, rightCP) ->
 		@moveTo coord
+		@isSelected = false
 		
 		@controlLeft = new ControlNode( leftCP, @, 'left' ) if leftCP
 		@controlRight = new ControlNode( rightCP, @, 'right' ) if rightCP
@@ -100,10 +137,6 @@ class CurveNode
 			# move the control points to their new positions
 			@controlLeft.moveTo leftVect
 			@controlRight.moveTo rightVect
-			
-			# double-ensure smoothing from one of the control points
-			# (in case something was screwed up by constraints)
-			@controlRight.smooth( )
 		
 		
 	moveTo: (coord) ->
@@ -116,12 +149,30 @@ class CurveNode
 		if @controlRight
 			newControlX = (@controlRight.x + nodeMove.x)
 			if @next and newControlX > @next.x
-				coord.x = @next.x - (newControlX - coord.x) 
-		
+				coord.x = @next.x - (newControlX - coord.x)
+			
+			###	
+			newControlY = (@controlRight.y + nodeMove.y)
+			if newControlY < @curve.topOffset
+				coord.y = @curve.topOffset - (newControlY - coord.y)
+			###
+			
 		if @controlLeft
 			newControlX = (@controlLeft.x + nodeMove.x)
 			if @prev and newControlX < @prev.x
 				coord.x = @prev.x - (newControlX - coord.x) 
+			
+			###	
+			newControlY = (@controlLeft.y + nodeMove.y)
+			if newControlY < @curve.topOffset
+				coord.y = @curve.topOffset - (newControlY - coord.y)
+			###
+			
+		# constrain within vertical bounds
+		if coord.y < @curve.topOffset
+			coord.y = @curve.topOffset
+		else if coord.y > @curve.topOffset + @curve.height
+			coord.y = @curve.topOffset + @curve.height
 				
 		# update movement vector with constrained values
 		nodeMove = v.sub coord, @
@@ -129,15 +180,23 @@ class CurveNode
 		# move control points with the moving of the curve
 		if @controlLeft
 			@controlLeft.moveTo (v.add @controlLeft, nodeMove)
-			
 		if @controlRight
 			@controlRight.moveTo (v.add @controlRight, nodeMove)
+		
+		if @style == 'smooth' and @controlLeft and @controlRight
+			if @controlLeft.y <= @curve.topOffset or @controlLeft.y >= @curve.topOffset + @curve.height
+				@controlLeft.smooth( )
+			
+			if @controlRight.y <= @curve.topOffset or @controlRight.y >= @curve.topOffset + @curve.height
+				@controlRight.smooth( )
 		
 		@x = coord.x
 		@y = coord.y
 
 class Curve
-	constructor: ->
+	constructor: (@topOffset) ->
+		@height = 256
+		
 		@color = "rgb(0,0,255)"
 		
 		# linked nodes
@@ -150,9 +209,36 @@ class Curve
 		@addNode (v 500, 200), (v 450, 300), null
 		
 		@firstNode.next.style = "sharp"
+	
+	disectAt: (disectionPoint) ->
+		x = disectionPoint.x
 		
+		currNode = @firstNode
+		while currNode != null and currNode.next != null
+			if x > currNode.x and x < currNode.next.x
+				t = cubicBezierAtX x, currNode, currNode.controlRight, currNode.next.controlLeft, currNode.next
+				controls = cubicDeCasteljau t, currNode, currNode.controlRight, currNode.next.controlLeft, currNode.next
+				
+				node = new CurveNode( @, disectionPoint, controls[0], controls[1] )
+				currNode.controlRight.moveTo controls[2]
+				currNode.next.controlLeft.moveTo controls[3]
+				
+				
+				node.prev = currNode
+				node.next = currNode.next
+				currNode.next.prev = node
+				currNode.next = node
+				
+				return node
+			else
+				currNode = currNode.next
+		
+		return null
+		
+		
+	
 	addNode: (pos, leftCP, rightCP) ->
-		node = new CurveNode( pos, leftCP, rightCP )
+		node = new CurveNode( @, pos, leftCP, rightCP )
 		
 		if @firstNode == null
 			@firstNode = node
@@ -162,6 +248,7 @@ class Curve
 			@lastNode.next = node
 			@lastNode = node
 		
+		return node
 		
 	drawCurveSegment: (start, end) ->
 		c1 = start.controlRight
@@ -187,9 +274,14 @@ class Curve
 		
 		offset = 3
 
-		ctx.lineWidth = 2
-		ctx.strokeStyle = "rgb(63,63,63)"
-		ctx.fillStyle = "rgb(195,195,195)"
+		if to.isSelected
+			ctx.lineWidth = 2
+			ctx.strokeStyle = "rgb(196,196,196)"
+			ctx.fillStyle = "rgb(195,195,195)"
+		else
+			ctx.lineWidth = 1
+			ctx.strokeStyle = "rgb(63,63,63)"
+			ctx.fillStyle = "rgb(195,195,195)"
 		
 		ctx.beginPath( )
 		ctx.moveTo to.x-offset, to.y
@@ -199,8 +291,9 @@ class Curve
 		ctx.lineTo to.x-offset, to.y
 		ctx.closePath( )
 		
-		ctx.stroke( )
 		ctx.fill( )
+		
+		ctx.stroke( )
 		
 	drawControlPoints: (node) ->
 		@drawControlLine node, node.controlLeft  if node.controlLeft
@@ -210,28 +303,34 @@ class Curve
 		x = node.x
 		y = node.y
 		
+		if node.isSelected
+			ctx.lineWidth = 2
+			ctx.strokeStyle = "rgb(128,128,128)"
+			brightness = 1
+		else
+			ctx.lineWidth = 1
+			ctx.strokeStyle = "rgb(63,63,63)"
+			brightness = 0.5
+		
 		if node.style == "sharp"
 			offset = 2.7
-			ctx.lineWidth = 2
 			ctx.fillStyle = "rgb(255,0,0)"
-			ctx.strokeStyle = "rgb(63,63,63)"
 			
 			ctx.beginPath( )
-			ctx.strokeRect x-offset, y-offset, offset*2, offset*2
 			ctx.fillRect x-offset, y-offset, offset*2, offset*2
+			
+			ctx.strokeRect x-offset, y-offset, offset*2, offset*2
 		else
 			radius = 3
-			ctx.lineWidth = 2
 			ctx.fillStyle = "rgb(0,255,0)"
-			ctx.strokeStyle = "rgb(63,63,63)"
 			
 			ctx.beginPath( )
 			ctx.arc x, y, radius, 0, TAU
 			ctx.closePath( )
 			
-			ctx.stroke( )
 			ctx.fill( )
-
+			
+			ctx.stroke( )
 	getNodes: ->
 		# get an array of the nodes 
 		# from the linked list representation
@@ -242,15 +341,18 @@ class Curve
 			currNode = currNode.next
 		return nodes
 	
-	draw: ->
+	drawSegments: ->
 		nodes = @getNodes( )
 		
 		for i in [0...nodes.length-1]
 			@drawCurveSegment nodes[i], nodes[i+1]
-			
+	
+	drawNodes: ->
+		nodes = @getNodes( )
 		@drawControlPoints node for node in nodes
 		
 		@drawNode node for node in nodes
+		
 		
 	controlAtMouse: (pan) ->
 		radius = 6
@@ -276,6 +378,7 @@ class Curve
 			return node if dist < radius
 		return null
 
+# TODO: multi pattern
 class App extends core.App
 	constructor: ->
 		super( )
@@ -290,11 +393,15 @@ class App extends core.App
 		@panSpeed = 3.0
 		@zoom = 1.0
 		
-		@curve = new Curve
+		@gridSize = 8
+		
+		@curves = [new Curve( 32 )]
 		@dragNode = null
 		@dragControl = null
-
-
+		
+		@disectionNode = new DisectionNode( )
+		
+		
 	updateDragging: (dt) ->
 		# handle the dragging parts of the update
 		
@@ -310,6 +417,7 @@ class App extends core.App
 		else if @dragNode
 			mouse = v.sub core.canvasMouse( ), @pan
 			
+			@disectionNode.coord = null
 			@dragNode.moveTo mouse
 				
 			@invalidate( )
@@ -317,6 +425,8 @@ class App extends core.App
 		else if @dragControl
 			mouse = v.sub core.canvasMouse( ), @pan
 			
+			
+			@disectionNode.coord = null
 			@dragControl.moveTo mouse
 			
 			if @dragControl.parentNode.style == 'smooth'
@@ -325,7 +435,33 @@ class App extends core.App
 			
 			@invalidate( )
 
+	resetDrag: ->
+		@dragNode.isSelected = false if @dragNode
+		@dragControl.isSelected = false if @dragControl
+		
+		@dragNode = null
+		@dragControl = null
+		@dragPan = null
+
+	createNode: ->
+		return if not @disectionNode.coord
+		
+		coord = v @disectionNode.coord
+		for curve in @curves
+			if coord.y > curve.topOffset and coord.y < curve.topOffset + curve.height
+				@dragNode = curve.disectAt coord
+				break
+		
+
 	update:( dt ) ->	
+		
+		mouse = v.sub core.canvasMouse( ), @pan
+		for curve in @curves
+			if mouse.y > curve.topOffset and mouse.y < curve.topOffset + curve.height
+				@disectionNode.move mouse.x, curve.firstNode
+			
+		@invalidate( ) if @disectionNode.coord
+			
 		
 		# keys do panning	at the moment
 		if core.input.down 'pan-left'
@@ -346,22 +482,31 @@ class App extends core.App
 		if core.input.pressed 'left-mouse'
 			$('.context-menu').fadeOut( 'fast' )
 			
-			@dragNode = @curve.nodeAtMouse @pan
-			@dragControl = @curve.controlAtMouse @pan
+			@resetDrag( )
+			
+			for curve in @curves
+				@dragNode = curve.nodeAtMouse @pan
+				@dragNode.isSelected = true if @dragNode
+				
+				if not @dragNode
+					@dragControl = curve.controlAtMouse @pan
+					@dragControl.isSelected = true if @dragControl
 			
 			if not @dragNode and not @dragControl
-				@dragPan = v core.canvasMouse( )
+				if @disectionNode.isUnderMouse @pan
+					@createNode( )
+				else
+					@dragPan = v core.canvasMouse( )
 				
 		# stop dragging	
-		#if not core.input.down 'left-mouse'
 		if core.input.released 'left-mouse'
-			@dragNode = null
-			@dragControl = null
-			@dragPan = null
+			@resetDrag( )
 		
 		# right click
 		if core.input.pressed 'right-mouse'
-			node = @curve.nodeAtMouse @pan
+			for curve in @curves
+				node = curve.nodeAtMouse @pan
+				
 			if node
 				# pop up a context menu on the selected node
 				
@@ -378,7 +523,7 @@ class App extends core.App
 		@updateDragging dt
 				
 	drawGrid: ->
-		gridSize = 10
+		gridSize = @gridSize
 		ctx.lineWidth = 1
 		ctx.strokeStyle = "rgb(50,50,50)"
 		
@@ -421,10 +566,39 @@ class App extends core.App
 		# automatic infinite panning grid
 		@drawGrid( )
 		
+		# draw curve upper and lower bounds
+		ctx.save( )
+		ctx.translate 0, @pan.y
+		
+		ctx.strokeStyle = "rgb(192,192,192)"
+		currY = 0
+		for curve in @curves
+			ctx.beginPath( )
+			ctx.moveTo 0, curve.topOffset
+			ctx.lineTo @width, curve.topOffset
+			ctx.stroke( )
+			
+			ctx.beginPath( )
+			ctx.moveTo 0, curve.topOffset + curve.height
+			ctx.lineTo @width, curve.topOffset + curve.height
+			ctx.stroke( )
+			
+		ctx.restore( )
+		
 		ctx.save( )
 		ctx.translate @pan.x, @pan.y
-	 	# draw the panned content
-		@curve.draw( )
+		
+	 	# draw curves
+		for curve in @curves
+			curve.drawSegments( )
+		
+		# draw disection node
+		@disectionNode.draw( )
+			
+		# draw curve nodes
+		for curve in @curves
+			curve.drawNodes( )
+			
 		ctx.restore( )
 	
 

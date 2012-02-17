@@ -1,4 +1,4 @@
-var App, ControlNode, Curve, CurveNode, app, canvas, ctx,
+var App, ControlNode, Curve, CurveNode, DisectionNode, app, canvas, ctx,
   __hasProp = Object.prototype.hasOwnProperty,
   __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor; child.__super__ = parent.prototype; return child; };
 
@@ -6,12 +6,62 @@ canvas = core.canvas;
 
 ctx = core.ctx;
 
+DisectionNode = (function() {
+
+  function DisectionNode() {
+    this.radius = 2;
+    this.clickRadius = 4;
+    this.coord = null;
+    this.bezierParameter;
+  }
+
+  DisectionNode.prototype.draw = function() {
+    var coord, offset;
+    if (this.coord) {
+      coord = this.coord;
+      offset = this.radius;
+      ctx.fillStyle = "rgba(255,255,255, 0.5)";
+      ctx.strokeStyle = "rgb(0,0,0)";
+      ctx.beginPath();
+      ctx.arc(coord.x, coord.y, this.radius, 0, TAU);
+      return ctx.fill();
+    }
+  };
+
+  DisectionNode.prototype.move = function(x, firstNode) {
+    var currNode, _results;
+    currNode = firstNode;
+    this.coord = null;
+    _results = [];
+    while (currNode !== null && currNode.next !== null) {
+      if (x > currNode.x && x < currNode.next.x) {
+        this.bezierParameter = cubicBezierAtX(x, currNode, currNode.controlRight, currNode.next.controlLeft, currNode.next);
+        this.coord = cubicBezier(this.bezierParameter, currNode, currNode.controlRight, currNode.next.controlLeft, currNode.next);
+        break;
+      }
+      _results.push(currNode = currNode.next);
+    }
+    return _results;
+  };
+
+  DisectionNode.prototype.isUnderMouse = function(pan) {
+    var mouse;
+    mouse = v.sub(core.canvasMouse(), pan);
+    if (!this.coord) return false;
+    return (v.sub(mouse, this.coord)).len() < this.clickRadius;
+  };
+
+  return DisectionNode;
+
+})();
+
 ControlNode = (function() {
 
   function ControlNode(coord, parentNode, type) {
     this.parentNode = parentNode;
     this.type = type;
     this.moveTo(coord);
+    this.isSelected = false;
   }
 
   ControlNode.prototype.oppositeType = function() {
@@ -33,6 +83,11 @@ ControlNode = (function() {
       if (this.parentNode.next && coord.x > this.parentNode.next.x) {
         coord.x = this.parentNode.next.x;
       }
+    }
+    if (coord.y < this.parentNode.curve.topOffset) {
+      coord.y = this.parentNode.curve.topOffset;
+    } else if (coord.y > this.parentNode.curve.topOffset + this.parentNode.curve.height) {
+      coord.y = this.parentNode.curve.topOffset + this.parentNode.curve.height;
     }
     return coord;
   };
@@ -63,8 +118,10 @@ ControlNode = (function() {
 
 CurveNode = (function() {
 
-  function CurveNode(coord, leftCP, rightCP) {
+  function CurveNode(curve, coord, leftCP, rightCP) {
+    this.curve = curve;
     this.moveTo(coord);
+    this.isSelected = false;
     if (leftCP) this.controlLeft = new ControlNode(leftCP, this, 'left');
     if (rightCP) this.controlRight = new ControlNode(rightCP, this, 'right');
     this.style = 'smooth';
@@ -91,8 +148,7 @@ CurveNode = (function() {
       leftVect = v.add(this, leftVect);
       rightVect = v.add(this, rightVect);
       this.controlLeft.moveTo(leftVect);
-      this.controlRight.moveTo(rightVect);
-      return this.controlRight.smooth();
+      return this.controlRight.moveTo(rightVect);
     }
   };
 
@@ -104,12 +160,27 @@ CurveNode = (function() {
       if (this.next && newControlX > this.next.x) {
         coord.x = this.next.x - (newControlX - coord.x);
       }
+      /*	
+      			newControlY = (@controlRight.y + nodeMove.y)
+      			if newControlY < @curve.topOffset
+      				coord.y = @curve.topOffset - (newControlY - coord.y)
+      */
     }
     if (this.controlLeft) {
       newControlX = this.controlLeft.x + nodeMove.x;
       if (this.prev && newControlX < this.prev.x) {
         coord.x = this.prev.x - (newControlX - coord.x);
       }
+      /*	
+      			newControlY = (@controlLeft.y + nodeMove.y)
+      			if newControlY < @curve.topOffset
+      				coord.y = @curve.topOffset - (newControlY - coord.y)
+      */
+    }
+    if (coord.y < this.curve.topOffset) {
+      coord.y = this.curve.topOffset;
+    } else if (coord.y > this.curve.topOffset + this.curve.height) {
+      coord.y = this.curve.topOffset + this.curve.height;
     }
     nodeMove = v.sub(coord, this);
     if (this.controlLeft) {
@@ -117,6 +188,14 @@ CurveNode = (function() {
     }
     if (this.controlRight) {
       this.controlRight.moveTo(v.add(this.controlRight, nodeMove));
+    }
+    if (this.style === 'smooth' && this.controlLeft && this.controlRight) {
+      if (this.controlLeft.y <= this.curve.topOffset || this.controlLeft.y >= this.curve.topOffset + this.curve.height) {
+        this.controlLeft.smooth();
+      }
+      if (this.controlRight.y <= this.curve.topOffset || this.controlRight.y >= this.curve.topOffset + this.curve.height) {
+        this.controlRight.smooth();
+      }
     }
     this.x = coord.x;
     return this.y = coord.y;
@@ -128,7 +207,9 @@ CurveNode = (function() {
 
 Curve = (function() {
 
-  function Curve() {
+  function Curve(topOffset) {
+    this.topOffset = topOffset;
+    this.height = 256;
     this.color = "rgb(0,0,255)";
     this.firstNode = null;
     this.lastNode = null;
@@ -138,17 +219,41 @@ Curve = (function() {
     this.firstNode.next.style = "sharp";
   }
 
+  Curve.prototype.disectAt = function(disectionPoint) {
+    var controls, currNode, node, t, x;
+    x = disectionPoint.x;
+    currNode = this.firstNode;
+    while (currNode !== null && currNode.next !== null) {
+      if (x > currNode.x && x < currNode.next.x) {
+        t = cubicBezierAtX(x, currNode, currNode.controlRight, currNode.next.controlLeft, currNode.next);
+        controls = cubicDeCasteljau(t, currNode, currNode.controlRight, currNode.next.controlLeft, currNode.next);
+        node = new CurveNode(this, disectionPoint, controls[0], controls[1]);
+        currNode.controlRight.moveTo(controls[2]);
+        currNode.next.controlLeft.moveTo(controls[3]);
+        node.prev = currNode;
+        node.next = currNode.next;
+        currNode.next.prev = node;
+        currNode.next = node;
+        return node;
+      } else {
+        currNode = currNode.next;
+      }
+    }
+    return null;
+  };
+
   Curve.prototype.addNode = function(pos, leftCP, rightCP) {
     var node;
-    node = new CurveNode(pos, leftCP, rightCP);
+    node = new CurveNode(this, pos, leftCP, rightCP);
     if (this.firstNode === null) {
       this.firstNode = node;
-      return this.lastNode = node;
+      this.lastNode = node;
     } else {
       node.prev = this.lastNode;
       this.lastNode.next = node;
-      return this.lastNode = node;
+      this.lastNode = node;
     }
+    return node;
   };
 
   Curve.prototype.drawCurveSegment = function(start, end) {
@@ -172,9 +277,15 @@ Curve = (function() {
     ctx.lineTo(to.x, to.y);
     ctx.stroke();
     offset = 3;
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = "rgb(63,63,63)";
-    ctx.fillStyle = "rgb(195,195,195)";
+    if (to.isSelected) {
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = "rgb(196,196,196)";
+      ctx.fillStyle = "rgb(195,195,195)";
+    } else {
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = "rgb(63,63,63)";
+      ctx.fillStyle = "rgb(195,195,195)";
+    }
     ctx.beginPath();
     ctx.moveTo(to.x - offset, to.y);
     ctx.lineTo(to.x, to.y - offset);
@@ -182,8 +293,8 @@ Curve = (function() {
     ctx.lineTo(to.x, to.y + offset);
     ctx.lineTo(to.x - offset, to.y);
     ctx.closePath();
-    ctx.stroke();
-    return ctx.fill();
+    ctx.fill();
+    return ctx.stroke();
   };
 
   Curve.prototype.drawControlPoints = function(node) {
@@ -192,27 +303,32 @@ Curve = (function() {
   };
 
   Curve.prototype.drawNode = function(node) {
-    var offset, radius, x, y;
+    var brightness, offset, radius, x, y;
     x = node.x;
     y = node.y;
+    if (node.isSelected) {
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = "rgb(128,128,128)";
+      brightness = 1;
+    } else {
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = "rgb(63,63,63)";
+      brightness = 0.5;
+    }
     if (node.style === "sharp") {
       offset = 2.7;
-      ctx.lineWidth = 2;
       ctx.fillStyle = "rgb(255,0,0)";
-      ctx.strokeStyle = "rgb(63,63,63)";
       ctx.beginPath();
-      ctx.strokeRect(x - offset, y - offset, offset * 2, offset * 2);
-      return ctx.fillRect(x - offset, y - offset, offset * 2, offset * 2);
+      ctx.fillRect(x - offset, y - offset, offset * 2, offset * 2);
+      return ctx.strokeRect(x - offset, y - offset, offset * 2, offset * 2);
     } else {
       radius = 3;
-      ctx.lineWidth = 2;
       ctx.fillStyle = "rgb(0,255,0)";
-      ctx.strokeStyle = "rgb(63,63,63)";
       ctx.beginPath();
       ctx.arc(x, y, radius, 0, TAU);
       ctx.closePath();
-      ctx.stroke();
-      return ctx.fill();
+      ctx.fill();
+      return ctx.stroke();
     }
   };
 
@@ -227,12 +343,19 @@ Curve = (function() {
     return nodes;
   };
 
-  Curve.prototype.draw = function() {
-    var i, node, nodes, _i, _j, _len, _len2, _ref, _results;
+  Curve.prototype.drawSegments = function() {
+    var i, nodes, _ref, _results;
     nodes = this.getNodes();
+    _results = [];
     for (i = 0, _ref = nodes.length - 1; 0 <= _ref ? i < _ref : i > _ref; 0 <= _ref ? i++ : i--) {
-      this.drawCurveSegment(nodes[i], nodes[i + 1]);
+      _results.push(this.drawCurveSegment(nodes[i], nodes[i + 1]));
     }
+    return _results;
+  };
+
+  Curve.prototype.drawNodes = function() {
+    var node, nodes, _i, _j, _len, _len2, _results;
+    nodes = this.getNodes();
     for (_i = 0, _len = nodes.length; _i < _len; _i++) {
       node = nodes[_i];
       this.drawControlPoints(node);
@@ -296,9 +419,11 @@ App = (function(_super) {
     this.pan = v(0, 0);
     this.panSpeed = 3.0;
     this.zoom = 1.0;
-    this.curve = new Curve;
+    this.gridSize = 8;
+    this.curves = [new Curve(32)];
     this.dragNode = null;
     this.dragControl = null;
+    this.disectionNode = new DisectionNode();
   }
 
   App.prototype.updateDragging = function(dt) {
@@ -311,10 +436,12 @@ App = (function(_super) {
       return this.invalidate();
     } else if (this.dragNode) {
       mouse = v.sub(core.canvasMouse(), this.pan);
+      this.disectionNode.coord = null;
       this.dragNode.moveTo(mouse);
       return this.invalidate();
     } else if (this.dragControl) {
       mouse = v.sub(core.canvasMouse(), this.pan);
+      this.disectionNode.coord = null;
       this.dragControl.moveTo(mouse);
       if (this.dragControl.parentNode.style === 'smooth') {
         this.dragControl.smooth();
@@ -323,8 +450,43 @@ App = (function(_super) {
     }
   };
 
+  App.prototype.resetDrag = function() {
+    if (this.dragNode) this.dragNode.isSelected = false;
+    if (this.dragControl) this.dragControl.isSelected = false;
+    this.dragNode = null;
+    this.dragControl = null;
+    return this.dragPan = null;
+  };
+
+  App.prototype.createNode = function() {
+    var coord, curve, _i, _len, _ref, _results;
+    if (!this.disectionNode.coord) return;
+    coord = v(this.disectionNode.coord);
+    _ref = this.curves;
+    _results = [];
+    for (_i = 0, _len = _ref.length; _i < _len; _i++) {
+      curve = _ref[_i];
+      if (coord.y > curve.topOffset && coord.y < curve.topOffset + curve.height) {
+        this.dragNode = curve.disectAt(coord);
+        break;
+      } else {
+        _results.push(void 0);
+      }
+    }
+    return _results;
+  };
+
   App.prototype.update = function(dt) {
-    var menu, menuPos, node;
+    var curve, menu, menuPos, mouse, node, _i, _j, _k, _len, _len2, _len3, _ref, _ref2, _ref3;
+    mouse = v.sub(core.canvasMouse(), this.pan);
+    _ref = this.curves;
+    for (_i = 0, _len = _ref.length; _i < _len; _i++) {
+      curve = _ref[_i];
+      if (mouse.y > curve.topOffset && mouse.y < curve.topOffset + curve.height) {
+        this.disectionNode.move(mouse.x, curve.firstNode);
+      }
+    }
+    if (this.disectionNode.coord) this.invalidate();
     if (core.input.down('pan-left')) {
       this.pan.x -= this.panSpeed;
       this.invalidate();
@@ -341,19 +503,32 @@ App = (function(_super) {
     }
     if (core.input.pressed('left-mouse')) {
       $('.context-menu').fadeOut('fast');
-      this.dragNode = this.curve.nodeAtMouse(this.pan);
-      this.dragControl = this.curve.controlAtMouse(this.pan);
+      this.resetDrag();
+      _ref2 = this.curves;
+      for (_j = 0, _len2 = _ref2.length; _j < _len2; _j++) {
+        curve = _ref2[_j];
+        this.dragNode = curve.nodeAtMouse(this.pan);
+        if (this.dragNode) this.dragNode.isSelected = true;
+        if (!this.dragNode) {
+          this.dragControl = curve.controlAtMouse(this.pan);
+          if (this.dragControl) this.dragControl.isSelected = true;
+        }
+      }
       if (!this.dragNode && !this.dragControl) {
-        this.dragPan = v(core.canvasMouse());
+        if (this.disectionNode.isUnderMouse(this.pan)) {
+          this.createNode();
+        } else {
+          this.dragPan = v(core.canvasMouse());
+        }
       }
     }
-    if (core.input.released('left-mouse')) {
-      this.dragNode = null;
-      this.dragControl = null;
-      this.dragPan = null;
-    }
+    if (core.input.released('left-mouse')) this.resetDrag();
     if (core.input.pressed('right-mouse')) {
-      node = this.curve.nodeAtMouse(this.pan);
+      _ref3 = this.curves;
+      for (_k = 0, _len3 = _ref3.length; _k < _len3; _k++) {
+        curve = _ref3[_k];
+        node = curve.nodeAtMouse(this.pan);
+      }
       if (node) {
         menuPos = v.add(core.toGlobal(node), this.pan);
         menu = $('.context-menu');
@@ -372,7 +547,7 @@ App = (function(_super) {
 
   App.prototype.drawGrid = function() {
     var col, gridSize, maxCol, maxRow, maxX, maxY, minCol, minRow, minX, minY, row, x, y, _results;
-    gridSize = 10;
+    gridSize = this.gridSize;
     ctx.lineWidth = 1;
     ctx.strokeStyle = "rgb(50,50,50)";
     minRow = -1;
@@ -407,12 +582,40 @@ App = (function(_super) {
   };
 
   App.prototype.draw = function() {
+    var currY, curve, _i, _j, _k, _len, _len2, _len3, _ref, _ref2, _ref3;
     App.__super__.draw.call(this);
     this.drawBackground();
     this.drawGrid();
     ctx.save();
+    ctx.translate(0, this.pan.y);
+    ctx.strokeStyle = "rgb(192,192,192)";
+    currY = 0;
+    _ref = this.curves;
+    for (_i = 0, _len = _ref.length; _i < _len; _i++) {
+      curve = _ref[_i];
+      ctx.beginPath();
+      ctx.moveTo(0, curve.topOffset);
+      ctx.lineTo(this.width, curve.topOffset);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(0, curve.topOffset + curve.height);
+      ctx.lineTo(this.width, curve.topOffset + curve.height);
+      ctx.stroke();
+    }
+    ctx.restore();
+    ctx.save();
     ctx.translate(this.pan.x, this.pan.y);
-    this.curve.draw();
+    _ref2 = this.curves;
+    for (_j = 0, _len2 = _ref2.length; _j < _len2; _j++) {
+      curve = _ref2[_j];
+      curve.drawSegments();
+    }
+    this.disectionNode.draw();
+    _ref3 = this.curves;
+    for (_k = 0, _len3 = _ref3.length; _k < _len3; _k++) {
+      curve = _ref3[_k];
+      curve.drawNodes();
+    }
     return ctx.restore();
   };
 

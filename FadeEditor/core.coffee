@@ -126,7 +126,8 @@ core.eventCode = (e) ->
 			core.button.WHEELUP
 		else
 			core.button.WHEELDOWN
-			
+
+# TODO, multicanvas: put this in App class
 core.canvas = document.getElementsByTagName('canvas')[0]
 core.ctx = core.canvas.getContext '2d'
 
