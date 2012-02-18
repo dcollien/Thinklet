@@ -1,4 +1,4 @@
-var TAU, Vect, cube, cubicBezier, cubicBezierAtX, cubicDeCasteljau, lerp, rand, randInt, sq, v, vary;
+var TAU, Vect, approxBezierDisectionParameter, cube, cubicBezier, cubicBezierAtX, cubicDeCasteljau, invertedCubicDeCasteljau, lerp, rand, randInt, sq, v, vary;
 
 TAU = Math.PI * 2;
 
@@ -65,6 +65,31 @@ cubicDeCasteljau = function(t, p0, p1, p2, p3) {
   return [r0, r1, q0, q2];
 };
 
+approxBezierDisectionParameter = function(p2, q0, q1) {
+  var t, tX, tY, xDenom, yDenom;
+  tX = 0.5;
+  tY = 0.5;
+  yDenom = q1.y - p2.y;
+  xDenom = q1.x - p2.x;
+  if (yDenom !== 0) tY = (q0.y - p2.y) / yDenom;
+  if (xDenom !== 0) tX = (q0.x - p2.x) / xDenom;
+  if (yDenom === 0) {
+    t = tX;
+  } else if (xDenom === 0) {
+    t = tY;
+  } else {
+    t = (tX + tY) * 0.5;
+  }
+  return t;
+};
+
+invertedCubicDeCasteljau = function(t, p0, p1, q2, q3) {
+  var r1, r2;
+  r1 = v.div(v.sub(p1, v.mul(p0, 1 - t)), t);
+  r2 = v.div(v.sub(q2, v.mul(q3, t)), 1 - t);
+  return [r1, r2];
+};
+
 Vect = function(x, y) {
   this.x = x;
   this.y = y;
@@ -104,6 +129,10 @@ v.sub = function(v1, v2) {
 
 v.mul = function(v1, s) {
   return v(v1.x * s, v1.y * s);
+};
+
+v.div = function(v1, s) {
+  return v(v1.x / s, v1.y / s);
 };
 
 v.dot = function(v1, v2) {

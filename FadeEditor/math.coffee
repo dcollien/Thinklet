@@ -44,6 +44,31 @@ cubicDeCasteljau = (t, p0, p1, p2, p3) ->
 	r1 = v.lerp t, q1, q2
 	return [r0, r1, q0, q2]
 	
+approxBezierDisectionParameter = (p2, q0, q1) ->
+	tX = 0.5
+	tY = 0.5
+	
+	yDenom = (q1.y - p2.y) 
+	xDenom = (q1.x - p2.x)
+	if yDenom != 0
+		tY = (q0.y - p2.y)/yDenom
+	
+	if xDenom != 0
+		tX = (q0.x - p2.x)/xDenom
+	
+	if yDenom == 0
+		t = tX
+	else if xDenom == 0
+		t = tY
+	else
+		t = (tX + tY) * 0.5
+		
+	return t
+	
+invertedCubicDeCasteljau = (t, p0, p1, q2, q3) ->
+	r1 = v.div (v.sub p1, (v.mul p0, (1-t))), t
+	r2 = v.div (v.sub q2, (v.mul q3, t)), (1-t)
+	return [r1, r2]
 
 	
 # Immutable type
@@ -63,6 +88,7 @@ v.forAngle = (a) ->	v(Math.cos(a), Math.sin(a))
 v.add = (v1, v2) -> v(v1.x+v2.x, v1.y+v2.y)
 v.sub = (v1, v2) -> v(v1.x-v2.x, v1.y-v2.y)
 v.mul = (v1, s) -> v(v1.x*s, v1.y*s)
+v.div = (v1, s) -> v(v1.x/s, v1.y/s)
 v.dot = (v1, v2) -> v1.x*v2.x + v1.y*v2.y
 v.unit = (v1) ->
 	len = v1.len( )

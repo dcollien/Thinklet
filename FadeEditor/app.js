@@ -129,6 +129,25 @@ CurveNode = (function() {
     this.prev = null;
   }
 
+  CurveNode.prototype.canRemove = function() {
+    return this.prev !== null && this.next !== null;
+  };
+
+  CurveNode.prototype.remove = function() {
+    var newControlPositions, t;
+    if (!this.canRemove) return;
+    t = approxBezierDisectionParameter(this.controlLeft, this, this.controlRight);
+    newControlPositions = invertedCubicDeCasteljau(t, this.prev, this.prev.controlRight, this.next.controlLeft, this.next);
+    if (this.prev.controlRight) {
+      this.prev.controlRight.moveTo(newControlPositions[0]);
+    }
+    if (this.next.controlLeft) {
+      this.next.controlLeft.moveTo(newControlPositions[1]);
+    }
+    this.next.prev = this.prev;
+    return this.prev.next = this.next;
+  };
+
   CurveNode.prototype.getControlNode = function(type) {
     if (type === 'left') return this.controlLeft;
     if (type === 'right') return this.controlRight;
@@ -654,6 +673,14 @@ $('#item-sharp-node').click(function() {
   var data;
   data = $('.context-menu').data();
   if (data.node) data.node.style = 'sharp';
+  $('.context-menu').fadeOut('fast');
+  return app.invalidate();
+});
+
+$('#item-remove-node').click(function() {
+  var data;
+  data = $('.context-menu').data();
+  if (data.node) data.node.remove();
   $('.context-menu').fadeOut('fast');
   return app.invalidate();
 });

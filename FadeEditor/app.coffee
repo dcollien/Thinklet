@@ -105,6 +105,27 @@ class CurveNode
 		
 		@next = null
 		@prev = null
+	
+	canRemove: ->
+		# not allowed to remove the end points
+		(@prev != null and @next != null)
+		
+	remove: ->
+		return if not @canRemove
+		
+		t = approxBezierDisectionParameter @controlLeft, @, @controlRight
+		newControlPositions = invertedCubicDeCasteljau t, @prev, @prev.controlRight, @next.controlLeft, @next
+		
+		if @prev.controlRight
+			@prev.controlRight.moveTo newControlPositions[0]
+		
+		if @next.controlLeft
+			@next.controlLeft.moveTo newControlPositions[1]
+		
+		@next.prev = @prev
+		@prev.next = @next
+		
+		# goodbye!
 		
 	getControlNode: (type) ->
 		if type == 'left'
@@ -627,5 +648,11 @@ $('#item-smooth-node').click ->
 $('#item-sharp-node').click ->
 	data = $('.context-menu').data( )
 	data.node.style = 'sharp' if data.node
+	$('.context-menu').fadeOut 'fast'
+	app.invalidate( )
+	
+$('#item-remove-node').click ->
+	data = $('.context-menu').data( )
+	data.node.remove( ) if data.node
 	$('.context-menu').fadeOut 'fast'
 	app.invalidate( )
