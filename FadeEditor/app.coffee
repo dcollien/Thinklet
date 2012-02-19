@@ -3,6 +3,13 @@ ctx = core.ctx
 
 flattenBy = 4
 
+nodeColors = {
+	smooth: "rgb(0,255,0)",
+	sharp: "rgb(255,0,0)",
+	flat: "rgb(255,255,0)",
+	symmetric: "rgb(255,0,255)"
+}
+
 class DisectionNode
 	constructor: ->
 		@radius = 2
@@ -75,7 +82,10 @@ class ControlNode
 			newParentAngle = (v.sub @parentNode, coord).angle( )
 			
 			# the distance of the opposite node from the parent
-			distance = (v.sub @parentNode, otherNode).len( )
+			if @parentNode.style == 'symmetric'
+				distance = (v.sub @parentNode, @).len( )
+			else
+				distance = (v.sub @parentNode, otherNode).len( )
 			
 			# make a new vector of the desired angle
 			# and lengthen it to the original distance
@@ -135,7 +145,32 @@ class CurveNode
 		if type == 'right'
 			return @controlRight
 	
+	flatten: ->
+		if @controlLeft
+			@controlLeft.x = @x 
+			@controlLeft.y = @y
+			
+		if @controlRight
+			@controlRight.x = @x 
+			@controlRight.y = @y
+	
+	reset: ->
+		@controlLeft.moveTo (v @x-32, @y)
+		@controlRight.moveTo (v @x+32, @y)
+			
+		if @style == 'smooth' or @style == 'symmetric'
+			@smooth( )
+		else if @style != 'flat'
+			@flatten( )
+		
 	smooth: ->
+		
+		if @controlLeft and v.eq @controlLeft, @
+			@reset( )
+		
+		if @controlRight and v.eq @controlRight, @
+			@reset( )
+			
 		if @controlLeft and @controlRight
 			# vectors from this parent node to the control points
 			leftOffset  = (v.sub @, @controlLeft)
@@ -149,9 +184,16 @@ class CurveNode
 			leftVect  = v.unit (v.sub rightUnit, leftUnit)
 			rightVect = v.unit (v.sub leftUnit, rightUnit)
 	
-			# the above vectors sized to their original lengths
-			leftVect  = v.mul leftVect, leftOffset.len( )
-			rightVect = v.mul rightVect, rightOffset.len( )
+			if @style == 'symmetric'
+				distance = (leftOffset.len( ) + rightOffset.len( )) / 2
+				# the above vectors sized to the average length
+				leftVect  = v.mul leftVect, distance
+				rightVect = v.mul rightVect, distance
+			else
+				# the above vectors sized to their original lengths
+				leftVect  = v.mul leftVect, leftOffset.len( )
+				rightVect = v.mul rightVect, rightOffset.len( )
+			
 	
 			# back to the original coordinate system
 			leftVect  = (v.add @, leftVect)
@@ -230,7 +272,7 @@ class CurveNode
 			@controlRight.moveTo (v.add @controlRight, nodeMove)
 		
 		
-		if @style == 'smooth' and @controlLeft and @controlRight
+		if @style == 'smooth' or @style == 'symmetric' and @controlLeft and @controlRight
 			if constrained
 				@smooth( )
 			if @controlLeft.y <= @curve.topOffset or @controlLeft.y >= @curve.topOffset + @curve.height
@@ -250,12 +292,9 @@ class Curve
 		@lastNode = null
 		
 		# debug
-		@addNode (v 0, 200), null, (v 60, 100)
-		@addNode (v 300, 200), (v 250, 300), (v 300, 300)
-		@addNode (v 500, 200), (v 450, 300), null
+		@addNode (v 0, @height/2+@topOffset), null, (v 128, @height/2+@topOffset)
+		@addNode (v @height*3, @height/2+@topOffset), (v @height*3-128, @height/2+@topOffset), null
 		
-		@firstNode.next.style = "sharp"
-	
 		@debug = false
 	
 	flatten: (threshold, steps) ->
@@ -282,7 +321,9 @@ class Curve
 		offPoints = (coords, line) ->
 			numPoints = 0
 			for coord in coords
-				linearError = Math.abs ((lineY coord.x, line) - coord.y)
+				linearErrorX = Math.abs ((lineX coord.y, line) - coord.x)
+				linearErrorY = Math.abs ((lineY coord.x, line) - coord.y)
+				linearError = Math.min linearErrorX, linearErrorY
 				if linearError >= threshold
 					numPoints += 1
 			return numPoints
@@ -384,7 +425,7 @@ class Curve
 		ctx.stroke( )
 		
 		offset = 3
-
+		
 		if to.isSelected
 			ctx.lineWidth = 2
 			ctx.strokeStyle = "rgb(196,196,196)"
@@ -407,8 +448,9 @@ class Curve
 		ctx.stroke( )
 		
 	drawControlPoints: (node) ->
-		@drawControlLine node, node.controlLeft  if node.controlLeft
-		@drawControlLine node, node.controlRight if node.controlRight
+		if node.style != "flat"
+			@drawControlLine node, node.controlLeft  if node.controlLeft
+			@drawControlLine node, node.controlRight if node.controlRight
 	
 	drawNode: (node) ->
 		x = node.x
@@ -423,25 +465,25 @@ class Curve
 			ctx.strokeStyle = "rgb(63,63,63)"
 			brightness = 0.5
 		
-		if node.style == "sharp"
+		if node.style == "sharp" or node.style == "flat"
 			offset = 2.7
-			ctx.fillStyle = "rgb(255,0,0)"
+			ctx.fillStyle = nodeColors[node.style]
 			
 			ctx.beginPath( )
 			ctx.fillRect x-offset, y-offset, offset*2, offset*2
 			
 			ctx.strokeRect x-offset, y-offset, offset*2, offset*2
-		else
+		else if node.style == "smooth" or node.style == "symmetric"
 			radius = 3
-			ctx.fillStyle = "rgb(0,255,0)"
+			ctx.fillStyle = nodeColors[node.style]
 			
 			ctx.beginPath( )
 			ctx.arc x, y, radius, 0, TAU
 			ctx.closePath( )
 			
 			ctx.fill( )
-			
 			ctx.stroke( )
+			
 	getNodes: ->
 		# get an array of the nodes 
 		# from the linked list representation
@@ -494,8 +536,17 @@ class App extends core.App
 	constructor: ->
 		super( )
 		
+		
+		@gridSize = 8
+		@barLength = 256
+		
+		@curveHeight = 256
+		@curveSpacing = 32
+		
+		numCurves = 6
+		
 		@width = 800
-		@height = 600
+		@height = @curveSpacing + numCurves*(@curveSpacing + @curveHeight)
 		
 		canvas.width = @width
 		canvas.height = @height
@@ -504,10 +555,15 @@ class App extends core.App
 		@panSpeed = 3.0
 		@zoom = 1.0
 		
-		@gridSize = 8
-		@barLength = 256
 		
-		@curves = [new Curve( 32 )]
+		@curves = []
+		
+		@maxPanX = 64
+		
+		
+		for i in [0..0] #numCurves
+			@curves.push new Curve( @curveSpacing + i*(@curveSpacing + @curveHeight) )
+			
 		@dragNode = null
 		@dragControl = null
 		
@@ -522,6 +578,14 @@ class App extends core.App
 			
 			diff = v.sub mouse, @dragPan
 			@pan = v.add diff, @pan
+			
+			# constrain y pan
+			@pan.y = 0
+			
+			if @pan.x > @maxPanX
+				@pan.x = @maxPanX
+			
+			
 			@dragPan = v mouse
 			
 			@invalidate( )
@@ -541,7 +605,7 @@ class App extends core.App
 			@disectionNode.coord = null
 			@dragControl.moveTo mouse
 			
-			if @dragControl.parentNode.style == 'smooth'
+			if @dragControl.parentNode.style == 'smooth' or @dragControl.parentNode.style == 'symmetric'
 				# constrain the smoothness of this node
 				@dragControl.smooth( )
 			
@@ -585,17 +649,24 @@ class App extends core.App
 		# keys do panning	at the moment
 		if core.input.down 'pan-left'
 			@pan.x -= @panSpeed
+				
 			@invalidate( )	
 		else if core.input.down 'pan-right'
 			@pan.x += @panSpeed
-			@invalidate( )
 			
+			if @pan.x > @maxPanX
+				@pan.x = @maxPanX
+				
+			@invalidate( )
+		
+		###
 		if core.input.down 'pan-up'
 			@pan.y -= @panSpeed
 			@invalidate( )	
 		else if core.input.down 'pan-down'
 			@pan.y += @panSpeed
 			@invalidate( )
+		###
 			
 		# register the different start-drags
 		if core.input.pressed 'left-mouse'
@@ -693,6 +764,10 @@ class App extends core.App
 		ctx.strokeStyle = "rgb(192,192,192)"
 		currY = 0
 		for curve in @curves
+			
+			ctx.fillStyle = "rgb(0,0,0)"
+			ctx.fillRect 0, curve.topOffset - @curveSpacing, @width, @curveSpacing
+			
 			ctx.beginPath( )
 			ctx.moveTo 0, curve.topOffset
 			ctx.lineTo @width, curve.topOffset
@@ -744,9 +819,7 @@ class App extends core.App
 		# draw flattened lines
 		if @debug
 			for curve in @curves
-				console.log curve
 				for line in (curve.flatten flattenBy)
-					console.log line
 					ctx.lineWidth = 1
 					ctx.strokeStyle = "rgb(255,255,255)"
 					ctx.beginPath( )
@@ -791,13 +864,45 @@ $('#item-smooth-node').click ->
 		
 $('#item-sharp-node').click ->
 	data = $('.context-menu').data( )
-	data.node.style = 'sharp' if data.node
+	
+	if data.node
+		if data.node.style is 'flat'
+			data.node.reset( )
+		data.node.style = 'sharp' 
+	
+	$('.context-menu').fadeOut 'fast'
+	app.invalidate( )
+	
+$('#item-flat-node').click ->
+	data = $('.context-menu').data( )
+	
+	if data.node
+		data.node.style = 'flat'
+		data.node.flatten( )
+	
+	$('.context-menu').fadeOut 'fast'
+	app.invalidate( )
+	
+
+$('#item-symmetric-node').click ->
+	data = $('.context-menu').data( )
+
+	if data.node
+		data.node.style = 'symmetric'
+		data.node.smooth( )
+
 	$('.context-menu').fadeOut 'fast'
 	app.invalidate( )
 	
 $('#item-remove-node').click ->
 	data = $('.context-menu').data( )
 	data.node.remove( ) if data.node
+	$('.context-menu').fadeOut 'fast'
+	app.invalidate( )
+
+$('#item-reset-node').click ->
+	data = $('.context-menu').data( )
+	data.node.reset( ) if data.node
 	$('.context-menu').fadeOut 'fast'
 	app.invalidate( )
 
@@ -810,7 +915,7 @@ $('#compile-button').click ->
 	lineToCode = (line) ->
 		p0 = line[0]
 		p1 = line[1]
-		'{{'+p0.x+','+p0.y+'},{'+p1.x+','+p1.y+'}}'
+		'{' + ([p0.x, p0.y, p1.x, p1.y].join ',') + '}'
 		
 	curves = app.curves
 	curveOutput = {}
@@ -822,7 +927,9 @@ $('#compile-button').click ->
 		lines = curve.flatten flattenBy
 		lines = lines.map integerfyLine
 		curveOutput['curve' + curveNum] = lines
-		outputCode.push 'uint8_t curve' + curveNum + '[' + lines.length + '][2][2] = {' + (lines.map lineToCode).join(',') + '};'
+		
+		linesCode = '{\n' + (lines.map lineToCode).join(',\n') + '\n}'
+		outputCode.push 'uint8_t curve' + curveNum + '[' + lines.length + '][4] = ' + linesCode + ';'
 		
 		curveNum += 1
 		

@@ -97,6 +97,14 @@ v.lerp = (t, v1, v2) -> v( (lerp t, v1.x, v2.x), (lerp t, v1.y, v2.y) )
 v.eq = (v1, v2) -> v1.x == v2.x and v1.y == v2.y
 v.map = (f, v1) -> v( (f v1.x), (f v1.y) )
 
+lineX = (y, line) ->
+	p0 = line[0]
+	p1 = line[1]
+
+	dy = p1.y - p0.y
+	dx = p1.x - p0.x
+	return (dx/dy) * (y - p0.y) + p0.x
+
 lineY = (x, line) ->
 	p0 = line[0]
 	p1 = line[1]

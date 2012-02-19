@@ -1,4 +1,4 @@
-var App, ControlNode, Curve, CurveNode, DisectionNode, app, canvas, ctx, flattenBy,
+var App, ControlNode, Curve, CurveNode, DisectionNode, app, canvas, ctx, flattenBy, nodeColors,
   __hasProp = Object.prototype.hasOwnProperty,
   __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor; child.__super__ = parent.prototype; return child; };
 
@@ -7,6 +7,13 @@ canvas = core.canvas;
 ctx = core.ctx;
 
 flattenBy = 4;
+
+nodeColors = {
+  smooth: "rgb(0,255,0)",
+  sharp: "rgb(255,0,0)",
+  flat: "rgb(255,255,0)",
+  symmetric: "rgb(255,0,255)"
+};
 
 DisectionNode = (function() {
 
@@ -100,7 +107,11 @@ ControlNode = (function() {
     otherNode = this.parentNode.getControlNode(this.oppositeType());
     if (otherNode && (v.sub(this.parentNode, this)).len() > 0) {
       newParentAngle = (v.sub(this.parentNode, coord)).angle();
-      distance = (v.sub(this.parentNode, otherNode)).len();
+      if (this.parentNode.style === 'symmetric') {
+        distance = (v.sub(this.parentNode, this)).len();
+      } else {
+        distance = (v.sub(this.parentNode, otherNode)).len();
+      }
       newUnitVect = v.forAngle(newParentAngle);
       newVectFromParent = v.mul(newUnitVect, distance);
       newVect = v.add(this.parentNode, newVectFromParent);
@@ -155,8 +166,31 @@ CurveNode = (function() {
     if (type === 'right') return this.controlRight;
   };
 
+  CurveNode.prototype.flatten = function() {
+    if (this.controlLeft) {
+      this.controlLeft.x = this.x;
+      this.controlLeft.y = this.y;
+    }
+    if (this.controlRight) {
+      this.controlRight.x = this.x;
+      return this.controlRight.y = this.y;
+    }
+  };
+
+  CurveNode.prototype.reset = function() {
+    this.controlLeft.moveTo(v(this.x - 32, this.y));
+    this.controlRight.moveTo(v(this.x + 32, this.y));
+    if (this.style === 'smooth' || this.style === 'symmetric') {
+      return this.smooth();
+    } else if (this.style !== 'flat') {
+      return this.flatten();
+    }
+  };
+
   CurveNode.prototype.smooth = function() {
-    var leftOffset, leftUnit, leftVect, rightOffset, rightUnit, rightVect;
+    var distance, leftOffset, leftUnit, leftVect, rightOffset, rightUnit, rightVect;
+    if (this.controlLeft && v.eq(this.controlLeft, this)) this.reset();
+    if (this.controlRight && v.eq(this.controlRight, this)) this.reset();
     if (this.controlLeft && this.controlRight) {
       leftOffset = v.sub(this, this.controlLeft);
       rightOffset = v.sub(this, this.controlRight);
@@ -164,8 +198,14 @@ CurveNode = (function() {
       rightUnit = v.unit(rightOffset);
       leftVect = v.unit(v.sub(rightUnit, leftUnit));
       rightVect = v.unit(v.sub(leftUnit, rightUnit));
-      leftVect = v.mul(leftVect, leftOffset.len());
-      rightVect = v.mul(rightVect, rightOffset.len());
+      if (this.style === 'symmetric') {
+        distance = (leftOffset.len() + rightOffset.len()) / 2;
+        leftVect = v.mul(leftVect, distance);
+        rightVect = v.mul(rightVect, distance);
+      } else {
+        leftVect = v.mul(leftVect, leftOffset.len());
+        rightVect = v.mul(rightVect, rightOffset.len());
+      }
       leftVect = v.add(this, leftVect);
       rightVect = v.add(this, rightVect);
       this.controlLeft.moveTo(leftVect);
@@ -226,7 +266,7 @@ CurveNode = (function() {
     if (this.controlRight) {
       this.controlRight.moveTo(v.add(this.controlRight, nodeMove));
     }
-    if (this.style === 'smooth' && this.controlLeft && this.controlRight) {
+    if (this.style === 'smooth' || this.style === 'symmetric' && this.controlLeft && this.controlRight) {
       if (constrained) this.smooth();
       if (this.controlLeft.y <= this.curve.topOffset || this.controlLeft.y >= this.curve.topOffset + this.curve.height) {
         return this.smooth();
@@ -248,10 +288,8 @@ Curve = (function() {
     this.color = "rgb(0,0,255)";
     this.firstNode = null;
     this.lastNode = null;
-    this.addNode(v(0, 200), null, v(60, 100));
-    this.addNode(v(300, 200), v(250, 300), v(300, 300));
-    this.addNode(v(500, 200), v(450, 300), null);
-    this.firstNode.next.style = "sharp";
+    this.addNode(v(0, this.height / 2 + this.topOffset), null, v(128, this.height / 2 + this.topOffset));
+    this.addNode(v(this.height * 3, this.height / 2 + this.topOffset), v(this.height * 3 - 128, this.height / 2 + this.topOffset), null);
     this.debug = false;
   }
 
@@ -274,11 +312,13 @@ Curve = (function() {
     if (!threshold) threshold = 2;
     if (!steps) steps = 100;
     offPoints = function(coords, line) {
-      var coord, linearError, numPoints, _i, _len;
+      var coord, linearError, linearErrorX, linearErrorY, numPoints, _i, _len;
       numPoints = 0;
       for (_i = 0, _len = coords.length; _i < _len; _i++) {
         coord = coords[_i];
-        linearError = Math.abs((lineY(coord.x, line)) - coord.y);
+        linearErrorX = Math.abs((lineX(coord.y, line)) - coord.x);
+        linearErrorY = Math.abs((lineY(coord.x, line)) - coord.y);
+        linearError = Math.min(linearErrorX, linearErrorY);
         if (linearError >= threshold) numPoints += 1;
       }
       return numPoints;
@@ -387,8 +427,10 @@ Curve = (function() {
   };
 
   Curve.prototype.drawControlPoints = function(node) {
-    if (node.controlLeft) this.drawControlLine(node, node.controlLeft);
-    if (node.controlRight) return this.drawControlLine(node, node.controlRight);
+    if (node.style !== "flat") {
+      if (node.controlLeft) this.drawControlLine(node, node.controlLeft);
+      if (node.controlRight) return this.drawControlLine(node, node.controlRight);
+    }
   };
 
   Curve.prototype.drawNode = function(node) {
@@ -404,15 +446,15 @@ Curve = (function() {
       ctx.strokeStyle = "rgb(63,63,63)";
       brightness = 0.5;
     }
-    if (node.style === "sharp") {
+    if (node.style === "sharp" || node.style === "flat") {
       offset = 2.7;
-      ctx.fillStyle = "rgb(255,0,0)";
+      ctx.fillStyle = nodeColors[node.style];
       ctx.beginPath();
       ctx.fillRect(x - offset, y - offset, offset * 2, offset * 2);
       return ctx.strokeRect(x - offset, y - offset, offset * 2, offset * 2);
-    } else {
+    } else if (node.style === "smooth" || node.style === "symmetric") {
       radius = 3;
-      ctx.fillStyle = "rgb(0,255,0)";
+      ctx.fillStyle = nodeColors[node.style];
       ctx.beginPath();
       ctx.arc(x, y, radius, 0, TAU);
       ctx.closePath();
@@ -500,17 +542,25 @@ App = (function(_super) {
   __extends(App, _super);
 
   function App() {
+    var i, numCurves;
     App.__super__.constructor.call(this);
+    this.gridSize = 8;
+    this.barLength = 256;
+    this.curveHeight = 256;
+    this.curveSpacing = 32;
+    numCurves = 6;
     this.width = 800;
-    this.height = 600;
+    this.height = this.curveSpacing + numCurves * (this.curveSpacing + this.curveHeight);
     canvas.width = this.width;
     canvas.height = this.height;
     this.pan = v(0, 0);
     this.panSpeed = 3.0;
     this.zoom = 1.0;
-    this.gridSize = 8;
-    this.barLength = 256;
-    this.curves = [new Curve(32)];
+    this.curves = [];
+    this.maxPanX = 64;
+    for (i = 0; i <= 0; i++) {
+      this.curves.push(new Curve(this.curveSpacing + i * (this.curveSpacing + this.curveHeight)));
+    }
     this.dragNode = null;
     this.dragControl = null;
     this.disectionNode = new DisectionNode();
@@ -522,6 +572,8 @@ App = (function(_super) {
       mouse = core.canvasMouse();
       diff = v.sub(mouse, this.dragPan);
       this.pan = v.add(diff, this.pan);
+      this.pan.y = 0;
+      if (this.pan.x > this.maxPanX) this.pan.x = this.maxPanX;
       this.dragPan = v(mouse);
       return this.invalidate();
     } else if (this.dragNode) {
@@ -533,7 +585,7 @@ App = (function(_super) {
       mouse = v.sub(core.canvasMouse(), this.pan);
       this.disectionNode.coord = null;
       this.dragControl.moveTo(mouse);
-      if (this.dragControl.parentNode.style === 'smooth') {
+      if (this.dragControl.parentNode.style === 'smooth' || this.dragControl.parentNode.style === 'symmetric') {
         this.dragControl.smooth();
       }
       return this.invalidate();
@@ -592,15 +644,17 @@ App = (function(_super) {
       this.invalidate();
     } else if (core.input.down('pan-right')) {
       this.pan.x += this.panSpeed;
+      if (this.pan.x > this.maxPanX) this.pan.x = this.maxPanX;
       this.invalidate();
     }
-    if (core.input.down('pan-up')) {
-      this.pan.y -= this.panSpeed;
-      this.invalidate();
-    } else if (core.input.down('pan-down')) {
-      this.pan.y += this.panSpeed;
-      this.invalidate();
-    }
+    /*
+    		if core.input.down 'pan-up'
+    			@pan.y -= @panSpeed
+    			@invalidate( )	
+    		else if core.input.down 'pan-down'
+    			@pan.y += @panSpeed
+    			@invalidate( )
+    */
     if (core.input.pressed('left-mouse')) {
       $('.context-menu').fadeOut('fast');
       this.resetDrag();
@@ -694,6 +748,8 @@ App = (function(_super) {
     _ref = this.curves;
     for (_i = 0, _len = _ref.length; _i < _len; _i++) {
       curve = _ref[_i];
+      ctx.fillStyle = "rgb(0,0,0)";
+      ctx.fillRect(0, curve.topOffset - this.curveSpacing, this.width, this.curveSpacing);
       ctx.beginPath();
       ctx.moveTo(0, curve.topOffset);
       ctx.lineTo(this.width, curve.topOffset);
@@ -739,11 +795,9 @@ App = (function(_super) {
       _ref5 = this.curves;
       for (_l = 0, _len4 = _ref5.length; _l < _len4; _l++) {
         curve = _ref5[_l];
-        console.log(curve);
         _ref6 = curve.flatten(flattenBy);
         for (_m = 0, _len5 = _ref6.length; _m < _len5; _m++) {
           line = _ref6[_m];
-          console.log(line);
           ctx.lineWidth = 1;
           ctx.strokeStyle = "rgb(255,255,255)";
           ctx.beginPath();
@@ -799,7 +853,32 @@ $('#item-smooth-node').click(function() {
 $('#item-sharp-node').click(function() {
   var data;
   data = $('.context-menu').data();
-  if (data.node) data.node.style = 'sharp';
+  if (data.node) {
+    if (data.node.style === 'flat') data.node.reset();
+    data.node.style = 'sharp';
+  }
+  $('.context-menu').fadeOut('fast');
+  return app.invalidate();
+});
+
+$('#item-flat-node').click(function() {
+  var data;
+  data = $('.context-menu').data();
+  if (data.node) {
+    data.node.style = 'flat';
+    data.node.flatten();
+  }
+  $('.context-menu').fadeOut('fast');
+  return app.invalidate();
+});
+
+$('#item-symmetric-node').click(function() {
+  var data;
+  data = $('.context-menu').data();
+  if (data.node) {
+    data.node.style = 'symmetric';
+    data.node.smooth();
+  }
   $('.context-menu').fadeOut('fast');
   return app.invalidate();
 });
@@ -812,8 +891,16 @@ $('#item-remove-node').click(function() {
   return app.invalidate();
 });
 
+$('#item-reset-node').click(function() {
+  var data;
+  data = $('.context-menu').data();
+  if (data.node) data.node.reset();
+  $('.context-menu').fadeOut('fast');
+  return app.invalidate();
+});
+
 $('#compile-button').click(function() {
-  var curve, curveNum, curveOutput, curves, integerfyLine, lineToCode, lines, outputCode, outputJSON, _i, _len;
+  var curve, curveNum, curveOutput, curves, integerfyLine, lineToCode, lines, linesCode, outputCode, outputJSON, _i, _len;
   integerfyLine = function(line) {
     return [v.map(Math.floor, line[0]), v.map(Math.floor, line[1])];
   };
@@ -821,7 +908,7 @@ $('#compile-button').click(function() {
     var p0, p1;
     p0 = line[0];
     p1 = line[1];
-    return '{{' + p0.x + ',' + p0.y + '},{' + p1.x + ',' + p1.y + '}}';
+    return '{' + ([p0.x, p0.y, p1.x, p1.y].join(',')) + '}';
   };
   curves = app.curves;
   curveOutput = {};
@@ -832,7 +919,8 @@ $('#compile-button').click(function() {
     lines = curve.flatten(flattenBy);
     lines = lines.map(integerfyLine);
     curveOutput['curve' + curveNum] = lines;
-    outputCode.push('uint8_t curve' + curveNum + '[' + lines.length + '][2][2] = {' + (lines.map(lineToCode)).join(',') + '};');
+    linesCode = '{\n' + (lines.map(lineToCode)).join(',\n') + '\n}';
+    outputCode.push('uint8_t curve' + curveNum + '[' + lines.length + '][4] = ' + linesCode + ';');
     curveNum += 1;
   }
   outputJSON = JSON.stringify(curveOutput);

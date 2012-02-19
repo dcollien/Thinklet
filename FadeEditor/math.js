@@ -1,4 +1,4 @@
-var TAU, Vect, approxBezierDisectionParameter, cube, cubicBezier, cubicBezierAtX, cubicDeCasteljau, invertedCubicDeCasteljau, lerp, lineY, rand, randInt, sq, v, vary;
+var TAU, Vect, approxBezierDisectionParameter, cube, cubicBezier, cubicBezierAtX, cubicDeCasteljau, invertedCubicDeCasteljau, lerp, lineX, lineY, rand, randInt, sq, v, vary;
 
 TAU = Math.PI * 2;
 
@@ -155,6 +155,15 @@ v.eq = function(v1, v2) {
 
 v.map = function(f, v1) {
   return v(f(v1.x), f(v1.y));
+};
+
+lineX = function(y, line) {
+  var dx, dy, p0, p1;
+  p0 = line[0];
+  p1 = line[1];
+  dy = p1.y - p0.y;
+  dx = p1.x - p0.x;
+  return (dx / dy) * (y - p0.y) + p0.x;
 };
 
 lineY = function(x, line) {
