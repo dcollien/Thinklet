@@ -20,7 +20,7 @@ cubicBezier = (t, p0, p1, p2, p3) ->
 	return v.add (v.add (v.add q0, q1), q2), q3
 	
 cubicBezierAtX = (x, p0, p1, p2, p3, tolerance) ->
-	tolerance = 0.5 if not tolerance
+	tolerance = 0.05 if not tolerance
 	
 	t = 0.5
 	lower = 0.0
@@ -45,6 +45,7 @@ cubicDeCasteljau = (t, p0, p1, p2, p3) ->
 	return [r0, r1, q0, q2]
 	
 approxBezierDisectionParameter = (p2, q0, q1) ->
+	# this could be smarter (least squares?), but works okay for now
 	tX = 0.5
 	tY = 0.5
 	

@@ -19,7 +19,7 @@ DisectionNode = (function() {
 
   function DisectionNode() {
     this.radius = 2;
-    this.clickRadius = 4;
+    this.clickRadius = 8;
     this.coord = null;
     this.bezierParameter;
   }
@@ -266,7 +266,7 @@ CurveNode = (function() {
     if (this.controlRight) {
       this.controlRight.moveTo(v.add(this.controlRight, nodeMove));
     }
-    if (this.style === 'smooth' || this.style === 'symmetric' && this.controlLeft && this.controlRight) {
+    if ((this.style === 'smooth' || this.style === 'symmetric') && this.controlLeft && this.controlRight) {
       if (constrained) this.smooth();
       if (this.controlLeft.y <= this.curve.topOffset || this.controlLeft.y >= this.curve.topOffset + this.curve.height) {
         return this.smooth();
@@ -293,6 +293,17 @@ Curve = (function() {
     this.debug = false;
   }
 
+  Curve.prototype.outputLines = function(threshold, steps) {
+    var line, lines, output, _i, _len;
+    lines = this.flatten(threshold, steps);
+    output = [];
+    for (_i = 0, _len = lines.length; _i < _len; _i++) {
+      line = lines[_i];
+      output.push([v(line[0].x, line[0].y - this.topOffset), v(line[1].x, line[1].y - this.topOffset)]);
+    }
+    return output;
+  };
+
   Curve.prototype.flatten = function(threshold, steps) {
     var currNode, end, lines, newLines, start;
     lines = [];
@@ -310,7 +321,7 @@ Curve = (function() {
   Curve.prototype.flattenBezier = function(p0, p1, p2, p3, threshold, steps) {
     var coords, currCoord, lastSegment, lines, offPoints, startCoord, stepSize, t, testLine;
     if (!threshold) threshold = 2;
-    if (!steps) steps = 100;
+    if (!steps) steps = 128;
     offPoints = function(coords, line) {
       var coord, linearError, linearErrorX, linearErrorY, numPoints, _i, _len;
       numPoints = 0;
@@ -900,15 +911,24 @@ $('#item-reset-node').click(function() {
 });
 
 $('#compile-button').click(function() {
-  var curve, curveNum, curveOutput, curves, integerfyLine, lineToCode, lines, linesCode, outputCode, outputJSON, _i, _len;
-  integerfyLine = function(line) {
-    return [v.map(Math.floor, line[0]), v.map(Math.floor, line[1])];
+  var barLength, coordToCode, coords, curve, curveHeight, curveNum, curveOutput, curves, gammaCorrectedDutyCycle, lastCoord, lineToCode, lines, linesCode, maxValue, outputCode, outputFunc, pwmBits, _i, _len;
+  pwmBits = 12;
+  curveHeight = 256;
+  barLength = 256;
+  maxValue = (Math.pow(2, pwmBits)) - 1;
+  outputFunc = null;
+  gammaCorrectedDutyCycle = function(value) {
+    var gamma;
+    gamma = 2.5;
+    return Math.floor(maxValue * (Math.pow(value / curveHeight, gamma)));
+  };
+  coordToCode = function(coord) {
+    var output;
+    output = outputFunc(coord.y);
+    return '{' + ([Math.floor(coord.x), output].join(',')) + '}';
   };
   lineToCode = function(line) {
-    var p0, p1;
-    p0 = line[0];
-    p1 = line[1];
-    return '{' + ([p0.x, p0.y, p1.x, p1.y].join(',')) + '}';
+    return coordToCode(line[0], outputFunc);
   };
   curves = app.curves;
   curveOutput = {};
@@ -916,13 +936,16 @@ $('#compile-button').click(function() {
   outputCode = [];
   for (_i = 0, _len = curves.length; _i < _len; _i++) {
     curve = curves[_i];
-    lines = curve.flatten(flattenBy);
-    lines = lines.map(integerfyLine);
+    lines = curve.outputLines(flattenBy);
     curveOutput['curve' + curveNum] = lines;
-    linesCode = '{\n' + (lines.map(lineToCode)).join(',\n') + '\n}';
-    outputCode.push('uint8_t curve' + curveNum + '[' + lines.length + '][4] = ' + linesCode + ';');
+    lastCoord = lines[lines.length - 1][1];
+    outputFunc = gammaCorrectedDutyCycle;
+    coords = lines.map(lineToCode);
+    coords = coords.concat([coordToCode(lastCoord, gammaCorrectedDutyCycle)]);
+    linesCode = '{\n' + coords.join(',\n') + '\n}';
+    outputCode.push('typedef struct {\n	// 256 = 1 second\n	uint8_t t;\n	// 4096 = on\n	uint16_t dutyCycle;\n} pwmKeyframe_t;');
+    outputCode.push('pwmKeyframe_t curve' + curveNum + '[' + (lines.length + 1) + '] = ' + linesCode + ';');
     curveNum += 1;
   }
-  outputJSON = JSON.stringify(curveOutput);
   return $('#compile-output').val(outputCode.join('\n'));
 });

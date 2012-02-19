@@ -10,10 +10,27 @@ nodeColors = {
 	symmetric: "rgb(255,0,255)"
 }
 
+
+# TODO:
+# - forward pushing
+# - multiple curves
+# - break into files by class
+# - new class to handle compilation (machine code/ihex) and calc duty cycle here
+# - timing text
+# - curves with selectable colour
+# - play marker and playback (simulation)
+# - minimap
+# - option to correct for gamma
+# - option to control compile accuracy
+# - compiler has knowledge of memory limit
+# - sub-patterns and looping
+# - easier disection node selection on near-vertical lines (y selection as well as x)
+
+
 class DisectionNode
 	constructor: ->
 		@radius = 2
-		@clickRadius = 4
+		@clickRadius = 8
 		@coord = null
 		@bezierParameter
 	draw: ->
@@ -272,7 +289,7 @@ class CurveNode
 			@controlRight.moveTo (v.add @controlRight, nodeMove)
 		
 		
-		if @style == 'smooth' or @style == 'symmetric' and @controlLeft and @controlRight
+		if (@style == 'smooth' or @style == 'symmetric') and @controlLeft and @controlRight
 			if constrained
 				@smooth( )
 			if @controlLeft.y <= @curve.topOffset or @controlLeft.y >= @curve.topOffset + @curve.height
@@ -297,6 +314,13 @@ class Curve
 		
 		@debug = false
 	
+	outputLines: (threshold, steps) ->
+		lines = @flatten threshold, steps
+		output = []
+		for line in lines
+			output.push [(v line[0].x, (line[0].y - @topOffset)), (v line[1].x, (line[1].y - @topOffset))]
+		return output
+	
 	flatten: (threshold, steps) ->
 		lines = []
 		
@@ -312,17 +336,20 @@ class Curve
 			currNode = currNode.next
 		return lines
 			
-	
+	# TODO: make this operate over entire curve to eliminate nodes as required points
+	# (although it might be nice to guarantee hitting the nodes?)
 	flattenBezier: (p0, p1, p2, p3, threshold, steps) ->
 		# x length?
 		threshold = 2 if not threshold
-		steps = 100 if not steps
+		steps = 128 if not steps
 
 		offPoints = (coords, line) ->
 			numPoints = 0
 			for coord in coords
 				linearErrorX = Math.abs ((lineX coord.y, line) - coord.x)
 				linearErrorY = Math.abs ((lineY coord.x, line) - coord.y)
+				
+				# deviate by either x or y
 				linearError = Math.min linearErrorX, linearErrorY
 				if linearError >= threshold
 					numPoints += 1
@@ -909,13 +936,24 @@ $('#item-reset-node').click ->
 
 # menu items
 $('#compile-button').click ->
-	integerfyLine = (line) ->
-		[(v.map Math.floor, line[0]), (v.map Math.floor, line[1])]
+	pwmBits = 12
+	curveHeight = 256
+	barLength = 256
+	
+	maxValue = (Math.pow 2, pwmBits) - 1
+	
+	outputFunc = null
+	
+	gammaCorrectedDutyCycle = (value) ->
+		gamma = 2.5
+		Math.floor (maxValue * (Math.pow (value/curveHeight), gamma))
+	
+	coordToCode = (coord) ->
+		output = outputFunc coord.y
+		'{' + ([(Math.floor coord.x), output].join ',') + '}'
 		
 	lineToCode = (line) ->
-		p0 = line[0]
-		p1 = line[1]
-		'{' + ([p0.x, p0.y, p1.x, p1.y].join ',') + '}'
+		coordToCode line[0], outputFunc
 		
 	curves = app.curves
 	curveOutput = {}
@@ -924,14 +962,34 @@ $('#compile-button').click ->
 	outputCode = []
 	
 	for curve in curves
-		lines = curve.flatten flattenBy
-		lines = lines.map integerfyLine
+		lines = curve.outputLines flattenBy
+		
 		curveOutput['curve' + curveNum] = lines
 		
-		linesCode = '{\n' + (lines.map lineToCode).join(',\n') + '\n}'
-		outputCode.push 'uint8_t curve' + curveNum + '[' + lines.length + '][4] = ' + linesCode + ';'
+		lastCoord = lines[lines.length-1][1]
+		
+		# use gamma correct function
+		outputFunc = gammaCorrectedDutyCycle
+		
+		# gamma correct and get duty cycle for first point in each line
+		coords = (lines.map lineToCode)
+		
+		# add the last lines's end point too
+		coords = coords.concat [(coordToCode lastCoord, gammaCorrectedDutyCycle)]
+		
+		linesCode = '{\n' + coords.join(',\n') + '\n}'
+		
+		outputCode.push '''
+		typedef struct {
+			// 256 = 1 second
+			uint8_t t;
+			// 4096 = on
+			uint16_t dutyCycle;
+		} pwmKeyframe_t;
+		'''
+		
+		outputCode.push 'pwmKeyframe_t curve' + curveNum + '[' + (lines.length + 1) + '] = ' + linesCode + ';'
 		
 		curveNum += 1
-		
-	outputJSON = JSON.stringify curveOutput
+	
 	$('#compile-output').val outputCode.join('\n')
