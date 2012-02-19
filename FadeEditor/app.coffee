@@ -690,8 +690,9 @@ class App extends core.App
 		@disectionNode.draw( )
 			
 		# draw curve nodes
-		for curve in @curves
-			curve.drawNodes( )
+		if not @debug
+			for curve in @curves
+				curve.drawNodes( )
 		
 		# draw flattened lines
 		if @debug
@@ -705,6 +706,15 @@ class App extends core.App
 					ctx.moveTo line[0].x, line[0].y
 					ctx.lineTo line[1].x, line[1].y
 					ctx.stroke( )
+					
+					ctx.fillStyle = "rgb(255,255,255)"
+					ctx.beginPath( )
+					ctx.arc line[0].x, line[0].y, 3, 0, TAU
+					ctx.fill( )
+					
+					ctx.beginPath( )
+					ctx.arc line[1].x, line[1].y, 3, 0, TAU
+					ctx.fill( )
 			
 		ctx.restore( )
 	

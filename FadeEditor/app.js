@@ -695,10 +695,12 @@ App = (function(_super) {
       curve.drawSegments();
     }
     this.disectionNode.draw();
-    _ref3 = this.curves;
-    for (_k = 0, _len3 = _ref3.length; _k < _len3; _k++) {
-      curve = _ref3[_k];
-      curve.drawNodes();
+    if (!this.debug) {
+      _ref3 = this.curves;
+      for (_k = 0, _len3 = _ref3.length; _k < _len3; _k++) {
+        curve = _ref3[_k];
+        curve.drawNodes();
+      }
     }
     if (this.debug) {
       _ref4 = this.curves;
@@ -715,6 +717,13 @@ App = (function(_super) {
           ctx.moveTo(line[0].x, line[0].y);
           ctx.lineTo(line[1].x, line[1].y);
           ctx.stroke();
+          ctx.fillStyle = "rgb(255,255,255)";
+          ctx.beginPath();
+          ctx.arc(line[0].x, line[0].y, 3, 0, TAU);
+          ctx.fill();
+          ctx.beginPath();
+          ctx.arc(line[1].x, line[1].y, 3, 0, TAU);
+          ctx.fill();
         }
       }
     }
