@@ -1,10 +1,12 @@
-var App, ControlNode, Curve, CurveNode, DisectionNode, app, canvas, ctx,
+var App, ControlNode, Curve, CurveNode, DisectionNode, app, canvas, ctx, flattenBy,
   __hasProp = Object.prototype.hasOwnProperty,
   __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor; child.__super__ = parent.prototype; return child; };
 
 canvas = core.canvas;
 
 ctx = core.ctx;
+
+flattenBy = 4;
 
 DisectionNode = (function() {
 
@@ -172,12 +174,15 @@ CurveNode = (function() {
   };
 
   CurveNode.prototype.moveTo = function(coord) {
-    var newControlX, nodeMove;
+    var constrained, newControlX, nodeMove;
     nodeMove = v.sub(coord, this);
+    constrained = false;
+    if (this === this.curve.firstNode) coord.x = 0;
     if (this.controlRight) {
       newControlX = this.controlRight.x + nodeMove.x;
       if (this.next && newControlX > this.next.x) {
         coord.x = this.next.x - (newControlX - coord.x);
+        constrained = true;
       }
       /*	
       			newControlY = (@controlRight.y + nodeMove.y)
@@ -189,6 +194,7 @@ CurveNode = (function() {
       newControlX = this.controlLeft.x + nodeMove.x;
       if (this.prev && newControlX < this.prev.x) {
         coord.x = this.prev.x - (newControlX - coord.x);
+        constrained = true;
       }
       /*	
       			newControlY = (@controlLeft.y + nodeMove.y)
@@ -196,12 +202,24 @@ CurveNode = (function() {
       				coord.y = @curve.topOffset - (newControlY - coord.y)
       */
     }
+    if (this.next && coord.x > this.next.controlLeft.x) {
+      coord.x = this.next.controlLeft.x;
+      constrained = true;
+    }
+    if (this.prev && coord.x < this.prev.controlRight.x) {
+      coord.x = this.prev.controlRight.x;
+      constrained = true;
+    }
     if (coord.y < this.curve.topOffset) {
       coord.y = this.curve.topOffset;
+      constrained = true;
     } else if (coord.y > this.curve.topOffset + this.curve.height) {
       coord.y = this.curve.topOffset + this.curve.height;
+      constrained = true;
     }
     nodeMove = v.sub(coord, this);
+    this.x = coord.x;
+    this.y = coord.y;
     if (this.controlLeft) {
       this.controlLeft.moveTo(v.add(this.controlLeft, nodeMove));
     }
@@ -209,15 +227,13 @@ CurveNode = (function() {
       this.controlRight.moveTo(v.add(this.controlRight, nodeMove));
     }
     if (this.style === 'smooth' && this.controlLeft && this.controlRight) {
+      if (constrained) this.smooth();
       if (this.controlLeft.y <= this.curve.topOffset || this.controlLeft.y >= this.curve.topOffset + this.curve.height) {
-        this.controlLeft.smooth();
-      }
-      if (this.controlRight.y <= this.curve.topOffset || this.controlRight.y >= this.curve.topOffset + this.curve.height) {
-        this.controlRight.smooth();
+        return this.smooth();
+      } else if (this.controlRight.y <= this.curve.topOffset || this.controlRight.y >= this.curve.topOffset + this.curve.height) {
+        return this.smooth();
       }
     }
-    this.x = coord.x;
-    return this.y = coord.y;
   };
 
   return CurveNode;
@@ -232,7 +248,7 @@ Curve = (function() {
     this.color = "rgb(0,0,255)";
     this.firstNode = null;
     this.lastNode = null;
-    this.addNode(v(10, 200), null, v(60, 100));
+    this.addNode(v(0, 200), null, v(60, 100));
     this.addNode(v(300, 200), v(250, 300), v(300, 300));
     this.addNode(v(500, 200), v(450, 300), null);
     this.firstNode.next.style = "sharp";
@@ -493,6 +509,7 @@ App = (function(_super) {
     this.panSpeed = 3.0;
     this.zoom = 1.0;
     this.gridSize = 8;
+    this.barLength = 256;
     this.curves = [new Curve(32)];
     this.dragNode = null;
     this.dragControl = null;
@@ -666,7 +683,7 @@ App = (function(_super) {
   };
 
   App.prototype.draw = function() {
-    var currY, curve, line, _i, _j, _k, _l, _len, _len2, _len3, _len4, _len5, _m, _ref, _ref2, _ref3, _ref4, _ref5;
+    var bar, currY, curve, line, _i, _j, _k, _l, _len, _len2, _len3, _len4, _len5, _m, _ref, _ref2, _ref3, _ref4, _ref5, _ref6;
     App.__super__.draw.call(this);
     this.drawBackground();
     this.drawGrid();
@@ -688,28 +705,44 @@ App = (function(_super) {
     }
     ctx.restore();
     ctx.save();
+    ctx.translate(this.pan.x, 0);
+    for (bar = -4, _ref2 = 4 * this.width / this.barLength; -4 <= _ref2 ? bar < _ref2 : bar > _ref2; -4 <= _ref2 ? bar++ : bar--) {
+      if (bar % 4 === 0) {
+        ctx.strokeStyle = "rgb(192,192,192)";
+      } else if (bar % 2 === 0) {
+        ctx.strokeStyle = "rgb(128,128,128)";
+      } else {
+        ctx.strokeStyle = "rgb(64,64,64)";
+      }
+      ctx.beginPath();
+      ctx.moveTo(bar * this.barLength / 4 - (Math.floor(this.pan.x / this.barLength)) * this.barLength, 0);
+      ctx.lineTo(bar * this.barLength / 4 - (Math.floor(this.pan.x / this.barLength)) * this.barLength, this.height);
+      ctx.stroke();
+    }
+    ctx.restore();
+    ctx.save();
     ctx.translate(this.pan.x, this.pan.y);
-    _ref2 = this.curves;
-    for (_j = 0, _len2 = _ref2.length; _j < _len2; _j++) {
-      curve = _ref2[_j];
+    _ref3 = this.curves;
+    for (_j = 0, _len2 = _ref3.length; _j < _len2; _j++) {
+      curve = _ref3[_j];
       curve.drawSegments();
     }
     this.disectionNode.draw();
     if (!this.debug) {
-      _ref3 = this.curves;
-      for (_k = 0, _len3 = _ref3.length; _k < _len3; _k++) {
-        curve = _ref3[_k];
+      _ref4 = this.curves;
+      for (_k = 0, _len3 = _ref4.length; _k < _len3; _k++) {
+        curve = _ref4[_k];
         curve.drawNodes();
       }
     }
     if (this.debug) {
-      _ref4 = this.curves;
-      for (_l = 0, _len4 = _ref4.length; _l < _len4; _l++) {
-        curve = _ref4[_l];
+      _ref5 = this.curves;
+      for (_l = 0, _len4 = _ref5.length; _l < _len4; _l++) {
+        curve = _ref5[_l];
         console.log(curve);
-        _ref5 = curve.flatten(2);
-        for (_m = 0, _len5 = _ref5.length; _m < _len5; _m++) {
-          line = _ref5[_m];
+        _ref6 = curve.flatten(flattenBy);
+        for (_m = 0, _len5 = _ref6.length; _m < _len5; _m++) {
+          line = _ref6[_m];
           console.log(line);
           ctx.lineWidth = 1;
           ctx.strokeStyle = "rgb(255,255,255)";
@@ -777,4 +810,31 @@ $('#item-remove-node').click(function() {
   if (data.node) data.node.remove();
   $('.context-menu').fadeOut('fast');
   return app.invalidate();
+});
+
+$('#compile-button').click(function() {
+  var curve, curveNum, curveOutput, curves, integerfyLine, lineToCode, lines, outputCode, outputJSON, _i, _len;
+  integerfyLine = function(line) {
+    return [v.map(Math.floor, line[0]), v.map(Math.floor, line[1])];
+  };
+  lineToCode = function(line) {
+    var p0, p1;
+    p0 = line[0];
+    p1 = line[1];
+    return '{{' + p0.x + ',' + p0.y + '},{' + p1.x + ',' + p1.y + '}}';
+  };
+  curves = app.curves;
+  curveOutput = {};
+  curveNum = 0;
+  outputCode = [];
+  for (_i = 0, _len = curves.length; _i < _len; _i++) {
+    curve = curves[_i];
+    lines = curve.flatten(flattenBy);
+    lines = lines.map(integerfyLine);
+    curveOutput['curve' + curveNum] = lines;
+    outputCode.push('uint8_t curve' + curveNum + '[' + lines.length + '][2][2] = {' + (lines.map(lineToCode)).join(',') + '};');
+    curveNum += 1;
+  }
+  outputJSON = JSON.stringify(curveOutput);
+  return $('#compile-output').val(outputCode.join('\n'));
 });

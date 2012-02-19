@@ -1,6 +1,8 @@
 canvas = core.canvas
 ctx = core.ctx
 
+flattenBy = 4
+
 class DisectionNode
 	constructor: ->
 		@radius = 2
@@ -57,7 +59,7 @@ class ControlNode
 			coord.y = @parentNode.curve.topOffset
 		else if coord.y > @parentNode.curve.topOffset + @parentNode.curve.height
 			coord.y = @parentNode.curve.topOffset + @parentNode.curve.height
-			
+		
 		return coord
 		
 	smooth: ->
@@ -138,23 +140,23 @@ class CurveNode
 			# vectors from this parent node to the control points
 			leftOffset  = (v.sub @, @controlLeft)
 			rightOffset = (v.sub @, @controlRight)
-	
+
 			# unit vectors of the above
 			leftUnit  = v.unit leftOffset
 			rightUnit = v.unit rightOffset
-		
+	
 			# the vectors joining the control points in either direction, normalised
 			leftVect  = v.unit (v.sub rightUnit, leftUnit)
 			rightVect = v.unit (v.sub leftUnit, rightUnit)
-		
+	
 			# the above vectors sized to their original lengths
 			leftVect  = v.mul leftVect, leftOffset.len( )
 			rightVect = v.mul rightVect, rightOffset.len( )
-		
+	
 			# back to the original coordinate system
 			leftVect  = (v.add @, leftVect)
 			rightVect = (v.add @, rightVect)
-	
+
 			# move the control points to their new positions
 			@controlLeft.moveTo leftVect
 			@controlRight.moveTo rightVect
@@ -165,12 +167,18 @@ class CurveNode
 		# how much it moved by this update
 		nodeMove = v.sub coord, @
 		
+		constrained = false
+		
+		if this is @curve.firstNode
+			coord.x = 0
+		
 		# constrain movement to not let
 		# control points past next or prev nodes
 		if @controlRight
 			newControlX = (@controlRight.x + nodeMove.x)
 			if @next and newControlX > @next.x
 				coord.x = @next.x - (newControlX - coord.x)
+				constrained = true
 			
 			###	
 			newControlY = (@controlRight.y + nodeMove.y)
@@ -182,6 +190,7 @@ class CurveNode
 			newControlX = (@controlLeft.x + nodeMove.x)
 			if @prev and newControlX < @prev.x
 				coord.x = @prev.x - (newControlX - coord.x) 
+				constrained = true
 			
 			###	
 			newControlY = (@controlLeft.y + nodeMove.y)
@@ -189,14 +198,30 @@ class CurveNode
 				coord.y = @curve.topOffset - (newControlY - coord.y)
 			###
 			
+		
+		
+		# a node isn't allowed past its neighbouring control points
+		if @next and coord.x > @next.controlLeft.x
+			coord.x = @next.controlLeft.x
+			constrained = true
+		if @prev and coord.x < @prev.controlRight.x
+			coord.x = @prev.controlRight.x
+			constrained = true
+			
+			
 		# constrain within vertical bounds
 		if coord.y < @curve.topOffset
 			coord.y = @curve.topOffset
+			constrained = true
 		else if coord.y > @curve.topOffset + @curve.height
 			coord.y = @curve.topOffset + @curve.height
+			constrained = true
 				
 		# update movement vector with constrained values
 		nodeMove = v.sub coord, @
+		
+		@x = coord.x
+		@y = coord.y
 		
 		# move control points with the moving of the curve
 		if @controlLeft
@@ -204,15 +229,15 @@ class CurveNode
 		if @controlRight
 			@controlRight.moveTo (v.add @controlRight, nodeMove)
 		
-		if @style == 'smooth' and @controlLeft and @controlRight
-			if @controlLeft.y <= @curve.topOffset or @controlLeft.y >= @curve.topOffset + @curve.height
-				@controlLeft.smooth( )
-			
-			if @controlRight.y <= @curve.topOffset or @controlRight.y >= @curve.topOffset + @curve.height
-				@controlRight.smooth( )
 		
-		@x = coord.x
-		@y = coord.y
+		if @style == 'smooth' and @controlLeft and @controlRight
+			if constrained
+				@smooth( )
+			if @controlLeft.y <= @curve.topOffset or @controlLeft.y >= @curve.topOffset + @curve.height
+				@smooth( )
+			else if @controlRight.y <= @curve.topOffset or @controlRight.y >= @curve.topOffset + @curve.height
+				@smooth( )
+			
 
 class Curve
 	constructor: (@topOffset) ->
@@ -225,7 +250,7 @@ class Curve
 		@lastNode = null
 		
 		# debug
-		@addNode (v 10, 200), null, (v 60, 100)
+		@addNode (v 0, 200), null, (v 60, 100)
 		@addNode (v 300, 200), (v 250, 300), (v 300, 300)
 		@addNode (v 500, 200), (v 450, 300), null
 		
@@ -480,6 +505,7 @@ class App extends core.App
 		@zoom = 1.0
 		
 		@gridSize = 8
+		@barLength = 256
 		
 		@curves = [new Curve( 32 )]
 		@dragNode = null
@@ -679,6 +705,27 @@ class App extends core.App
 			
 		ctx.restore( )
 		
+		# draw bar lines
+		ctx.save( )
+		ctx.translate @pan.x, 0
+		
+		for bar in [-4...(4*@width/@barLength)]
+			
+			if bar % 4 == 0
+				ctx.strokeStyle = "rgb(192,192,192)"
+			else if bar % 2 == 0
+				ctx.strokeStyle = "rgb(128,128,128)"
+			else
+				ctx.strokeStyle = "rgb(64,64,64)"
+				
+			ctx.beginPath( )
+			ctx.moveTo bar*@barLength/4 - (Math.floor (@pan.x / @barLength)) * @barLength, 0
+			ctx.lineTo bar*@barLength/4 - (Math.floor (@pan.x / @barLength)) * @barLength, @height
+			ctx.stroke( )
+		
+		ctx.restore( )
+		
+		
 		ctx.save( )
 		ctx.translate @pan.x, @pan.y
 		
@@ -698,7 +745,7 @@ class App extends core.App
 		if @debug
 			for curve in @curves
 				console.log curve
-				for line in (curve.flatten 2)
+				for line in (curve.flatten flattenBy)
 					console.log line
 					ctx.lineWidth = 1
 					ctx.strokeStyle = "rgb(255,255,255)"
@@ -753,3 +800,31 @@ $('#item-remove-node').click ->
 	data.node.remove( ) if data.node
 	$('.context-menu').fadeOut 'fast'
 	app.invalidate( )
+
+
+# menu items
+$('#compile-button').click ->
+	integerfyLine = (line) ->
+		[(v.map Math.floor, line[0]), (v.map Math.floor, line[1])]
+		
+	lineToCode = (line) ->
+		p0 = line[0]
+		p1 = line[1]
+		'{{'+p0.x+','+p0.y+'},{'+p1.x+','+p1.y+'}}'
+		
+	curves = app.curves
+	curveOutput = {}
+	curveNum = 0
+	
+	outputCode = []
+	
+	for curve in curves
+		lines = curve.flatten flattenBy
+		lines = lines.map integerfyLine
+		curveOutput['curve' + curveNum] = lines
+		outputCode.push 'uint8_t curve' + curveNum + '[' + lines.length + '][2][2] = {' + (lines.map lineToCode).join(',') + '};'
+		
+		curveNum += 1
+		
+	outputJSON = JSON.stringify curveOutput
+	$('#compile-output').val outputCode.join('\n')

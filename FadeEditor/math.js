@@ -153,6 +153,10 @@ v.eq = function(v1, v2) {
   return v1.x === v2.x && v1.y === v2.y;
 };
 
+v.map = function(f, v1) {
+  return v(f(v1.x), f(v1.y));
+};
+
 lineY = function(x, line) {
   var dx, dy, p0, p1;
   p0 = line[0];
