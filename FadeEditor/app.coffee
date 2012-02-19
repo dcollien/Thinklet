@@ -539,18 +539,22 @@ class App extends core.App
 				break
 		
 
-	update:( dt ) ->	
+	update:( dt ) ->
 		
 		mouse = v.sub core.canvasMouse( ), @pan
+		
 		for curve in @curves
 			if mouse.y > curve.topOffset and mouse.y < curve.topOffset + curve.height
 				@disectionNode.move mouse.x, curve.firstNode
-				@invalidate( ) if @disectionNode.coord
+				@invalidate( ) if @disectionNode.coord and not v.eq mouse, @lastMouse
 		
 		if core.input.down 'debug'
 			@debug = true
-		else
+			@invalidate( )
+		
+		if core.input.released 'debug'
 			@debug = false
+			@invalidate( )
 		
 		# keys do panning	at the moment
 		if core.input.down 'pan-left'
@@ -610,7 +614,8 @@ class App extends core.App
 				menu.offset { top: menuPos.y, left: menuPos.x }
 			
 		@updateDragging dt
-				
+		@lastMouse = mouse
+			
 	drawGrid: ->
 		gridSize = @gridSize
 		ctx.lineWidth = 1

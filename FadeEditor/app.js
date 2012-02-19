@@ -557,13 +557,18 @@ App = (function(_super) {
       curve = _ref[_i];
       if (mouse.y > curve.topOffset && mouse.y < curve.topOffset + curve.height) {
         this.disectionNode.move(mouse.x, curve.firstNode);
-        if (this.disectionNode.coord) this.invalidate();
+        if (this.disectionNode.coord && !v.eq(mouse, this.lastMouse)) {
+          this.invalidate();
+        }
       }
     }
     if (core.input.down('debug')) {
       this.debug = true;
-    } else {
+      this.invalidate();
+    }
+    if (core.input.released('debug')) {
       this.debug = false;
+      this.invalidate();
     }
     if (core.input.down('pan-left')) {
       this.pan.x -= this.panSpeed;
@@ -620,7 +625,8 @@ App = (function(_super) {
         });
       }
     }
-    return this.updateDragging(dt);
+    this.updateDragging(dt);
+    return this.lastMouse = mouse;
   };
 
   App.prototype.drawGrid = function() {

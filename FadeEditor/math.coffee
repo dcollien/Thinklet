@@ -20,7 +20,7 @@ cubicBezier = (t, p0, p1, p2, p3) ->
 	return v.add (v.add (v.add q0, q1), q2), q3
 	
 cubicBezierAtX = (x, p0, p1, p2, p3, tolerance) ->
-	tolerance = 0.1 if not tolerance
+	tolerance = 0.5 if not tolerance
 	
 	t = 0.5
 	lower = 0.0

@@ -37,7 +37,7 @@ cubicBezier = function(t, p0, p1, p2, p3) {
 
 cubicBezierAtX = function(x, p0, p1, p2, p3, tolerance) {
   var lower, result, t, upper;
-  if (!tolerance) tolerance = 0.1;
+  if (!tolerance) tolerance = 0.5;
   t = 0.5;
   lower = 0.0;
   upper = 1.0;
