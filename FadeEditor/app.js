@@ -236,7 +236,61 @@ Curve = (function() {
     this.addNode(v(300, 200), v(250, 300), v(300, 300));
     this.addNode(v(500, 200), v(450, 300), null);
     this.firstNode.next.style = "sharp";
+    this.debug = false;
   }
+
+  Curve.prototype.flatten = function(threshold, steps) {
+    var currNode, end, lines, newLines, start;
+    lines = [];
+    currNode = this.firstNode;
+    while (currNode !== null && currNode.next !== null) {
+      start = currNode;
+      end = currNode.next;
+      newLines = this.flattenBezier(start, start.controlRight, end.controlLeft, end, threshold, steps);
+      lines = lines.concat(newLines);
+      currNode = currNode.next;
+    }
+    return lines;
+  };
+
+  Curve.prototype.flattenBezier = function(p0, p1, p2, p3, threshold, steps) {
+    var coords, currCoord, lastSegment, lines, offPoints, startCoord, stepSize, t, testLine;
+    if (!threshold) threshold = 2;
+    if (!steps) steps = 100;
+    offPoints = function(coords, line) {
+      var coord, linearError, numPoints, _i, _len;
+      numPoints = 0;
+      for (_i = 0, _len = coords.length; _i < _len; _i++) {
+        coord = coords[_i];
+        linearError = Math.abs((lineY(coord.x, line)) - coord.y);
+        if (linearError >= threshold) numPoints += 1;
+      }
+      return numPoints;
+    };
+    lines = [];
+    stepSize = 1 / steps;
+    lastSegment = [v(p0, v(p1))];
+    startCoord = v(p0);
+    coords = [];
+    t = stepSize;
+    while (t < 1) {
+      currCoord = cubicBezier(t, p0, p1, p2, p3);
+      coords.push(currCoord);
+      testLine = [startCoord, currCoord];
+      if ((offPoints(coords, testLine)) > threshold) {
+        lastSegment = [startCoord, currCoord];
+        lines.push(lastSegment);
+        startCoord = currCoord;
+        coords = [];
+      } else {
+        lastSegment = testLine;
+      }
+      t += stepSize;
+    }
+    lastSegment = [startCoord, v(p3)];
+    lines.push(lastSegment);
+    return lines;
+  };
 
   Curve.prototype.disectAt = function(disectionPoint) {
     var controls, currNode, node, t, x;
@@ -503,9 +557,14 @@ App = (function(_super) {
       curve = _ref[_i];
       if (mouse.y > curve.topOffset && mouse.y < curve.topOffset + curve.height) {
         this.disectionNode.move(mouse.x, curve.firstNode);
+        if (this.disectionNode.coord) this.invalidate();
       }
     }
-    if (this.disectionNode.coord) this.invalidate();
+    if (core.input.down('debug')) {
+      this.debug = true;
+    } else {
+      this.debug = false;
+    }
     if (core.input.down('pan-left')) {
       this.pan.x -= this.panSpeed;
       this.invalidate();
@@ -601,7 +660,7 @@ App = (function(_super) {
   };
 
   App.prototype.draw = function() {
-    var currY, curve, _i, _j, _k, _len, _len2, _len3, _ref, _ref2, _ref3;
+    var currY, curve, line, _i, _j, _k, _l, _len, _len2, _len3, _len4, _len5, _m, _ref, _ref2, _ref3, _ref4, _ref5;
     App.__super__.draw.call(this);
     this.drawBackground();
     this.drawGrid();
@@ -635,6 +694,24 @@ App = (function(_super) {
       curve = _ref3[_k];
       curve.drawNodes();
     }
+    if (this.debug) {
+      _ref4 = this.curves;
+      for (_l = 0, _len4 = _ref4.length; _l < _len4; _l++) {
+        curve = _ref4[_l];
+        console.log(curve);
+        _ref5 = curve.flatten(2);
+        for (_m = 0, _len5 = _ref5.length; _m < _len5; _m++) {
+          line = _ref5[_m];
+          console.log(line);
+          ctx.lineWidth = 1;
+          ctx.strokeStyle = "rgb(255,255,255)";
+          ctx.beginPath();
+          ctx.moveTo(line[0].x, line[0].y);
+          ctx.lineTo(line[1].x, line[1].y);
+          ctx.stroke();
+        }
+      }
+    }
     return ctx.restore();
   };
 
@@ -653,6 +730,8 @@ core.input.bind(core.key.DOWN_ARROW, 'pan-down');
 core.input.bind(core.button.RIGHT, 'right-mouse');
 
 core.input.bind(core.button.LEFT, 'left-mouse');
+
+core.input.bind(core.key.D, 'debug');
 
 app = new App();
 

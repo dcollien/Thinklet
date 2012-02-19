@@ -96,3 +96,10 @@ v.unit = (v1) ->
 v.lerp = (t, v1, v2) -> v( (lerp t, v1.x, v2.x), (lerp t, v1.y, v2.y) )
 v.eq = (v1, v2) -> v1.x == v2.x and v1.y == v2.y
 
+lineY = (x, line) ->
+	p0 = line[0]
+	p1 = line[1]
+
+	dy = p1.y - p0.y
+	dx = p1.x - p0.x
+	return (dy/dx) * (x - p0.x) + p0.y

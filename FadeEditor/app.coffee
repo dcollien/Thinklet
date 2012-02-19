@@ -231,6 +231,71 @@ class Curve
 		
 		@firstNode.next.style = "sharp"
 	
+		@debug = false
+	
+	flatten: (threshold, steps) ->
+		lines = []
+		
+		currNode = @firstNode
+		while currNode != null and currNode.next != null
+			
+			start = currNode
+			end = currNode.next
+			
+			newLines = @flattenBezier start, start.controlRight, end.controlLeft, end, threshold, steps
+			lines = lines.concat newLines
+			
+			currNode = currNode.next
+		return lines
+			
+	
+	flattenBezier: (p0, p1, p2, p3, threshold, steps) ->
+		# x length?
+		threshold = 2 if not threshold
+		steps = 100 if not steps
+
+		offPoints = (coords, line) ->
+			numPoints = 0
+			for coord in coords
+				linearError = Math.abs ((lineY coord.x, line) - coord.y)
+				if linearError >= threshold
+					numPoints += 1
+			return numPoints
+		
+		
+		lines = []
+
+		stepSize = 1/steps
+
+		lastSegment = [v p0, v p1]
+		startCoord = v p0
+
+		coords = []
+		t = stepSize
+		while t < 1
+			currCoord = cubicBezier t, p0, p1, p2, p3
+			coords.push currCoord
+			
+			testLine = [startCoord, currCoord]
+			
+			# error too large, make a new line segment
+			if (offPoints coords, testLine) > threshold
+				lastSegment = [startCoord, currCoord]
+				lines.push lastSegment
+
+				startCoord = currCoord
+				coords = []
+			else
+				lastSegment = testLine
+
+			t += stepSize
+
+		lastSegment = [startCoord, v p3]
+		lines.push lastSegment
+		
+		return lines
+
+
 	disectAt: (disectionPoint) ->
 		x = disectionPoint.x
 		
@@ -480,9 +545,12 @@ class App extends core.App
 		for curve in @curves
 			if mouse.y > curve.topOffset and mouse.y < curve.topOffset + curve.height
 				@disectionNode.move mouse.x, curve.firstNode
-			
-		@invalidate( ) if @disectionNode.coord
-			
+				@invalidate( ) if @disectionNode.coord
+		
+		if core.input.down 'debug'
+			@debug = true
+		else
+			@debug = false
 		
 		# keys do panning	at the moment
 		if core.input.down 'pan-left'
@@ -619,6 +687,19 @@ class App extends core.App
 		# draw curve nodes
 		for curve in @curves
 			curve.drawNodes( )
+		
+		# draw flattened lines
+		if @debug
+			for curve in @curves
+				console.log curve
+				for line in (curve.flatten 2)
+					console.log line
+					ctx.lineWidth = 1
+					ctx.strokeStyle = "rgb(255,255,255)"
+					ctx.beginPath( )
+					ctx.moveTo line[0].x, line[0].y
+					ctx.lineTo line[1].x, line[1].y
+					ctx.stroke( )
 			
 		ctx.restore( )
 	
@@ -629,6 +710,7 @@ core.input.bind core.key.UP_ARROW, 'pan-up'
 core.input.bind core.key.DOWN_ARROW, 'pan-down'
 core.input.bind core.button.RIGHT, 'right-mouse'
 core.input.bind core.button.LEFT, 'left-mouse'
+core.input.bind core.key.D, 'debug'
 
 
 app = new App( )
