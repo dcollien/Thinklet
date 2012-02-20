@@ -28,11 +28,15 @@ class App extends core.App
 		@maxPanX = 64
 		
 		
-		for i in [0..0] #numCurves
+		for i in [0..numCurves]
 			@curves.push new Curve( @curveSpacing + i*(@curveSpacing + @curveHeight) )
 			
 		@dragNode = null
 		@dragControl = null
+		
+		@pushDrag = null
+		@pushStart = null
+		@pushMode = false
 		
 		@disectionNode = new DisectionNode( )
 		
@@ -40,7 +44,19 @@ class App extends core.App
 	updateDragging: (dt) ->
 		# handle the dragging parts of the update
 		
-		if @dragPan
+		if @pushDrag
+			mouse = v.sub core.canvasMouse( ), @pan
+			diff = v.sub mouse, @pushDrag
+			@pushDrag = mouse
+			for curve in @curves
+				if core.input.down 'precision'
+					curve.stretch mouse.x, diff.x
+				else if mouse.y > curve.topOffset and mouse.y < curve.topOffset + curve.height
+					curve.stretch mouse.x, diff.x
+					break
+			
+			@invalidate( )
+		else if @dragPan
 			mouse = core.canvasMouse( )
 			
 			diff = v.sub mouse, @dragPan
@@ -85,6 +101,8 @@ class App extends core.App
 		@dragNode = null
 		@dragControl = null
 		@dragPan = null
+		@pushDrag = null
+		@pushStart = null
 
 	createNode: ->
 		return if not @disectionNode.coord
@@ -99,11 +117,27 @@ class App extends core.App
 	update:( dt ) ->
 		
 		mouse = v.sub core.canvasMouse( ), @pan
+			
+		if core.input.pressed 'push'
+			$canvas = $(canvas)
+			$canvas.css 'cursor', 'ew-resize'
+			@pushMode = true
+		else if core.input.released 'push'
+			$(canvas).css 'cursor', 'auto'
+			@pushMode = false
+		if not core.input.down 'push'
+			@prevPushCursor = null
+			
+		if core.input.pressed 'precision'
+			$canvas = $(canvas)
+			$canvas.css 'cursor', 'crosshair'
+		else if core.input.released 'precision'
+			$(canvas).css 'cursor', 'auto'
 		
 		for curve in @curves
 			if mouse.y > curve.topOffset and mouse.y < curve.topOffset + curve.height
 				@disectionNode.move mouse.x, curve.firstNode
-				@invalidate( ) if @disectionNode.coord and not v.eq mouse, @lastMouse
+				@invalidate( ) if @lastMouse and @disectionNode.coord and not v.eq mouse, @lastMouse
 		
 		if core.input.down 'debug'
 			@debug = true
@@ -141,19 +175,28 @@ class App extends core.App
 			
 			@resetDrag( )
 			
-			for curve in @curves
-				@dragNode = curve.nodeAtMouse @pan
-				@dragNode.isSelected = true if @dragNode
+			if core.input.down 'push'
+				@pushDrag = mouse
+				@pushStart = mouse
+			else if core.input.down 'precision'
+				@createNode( )
+			else
+				for curve in @curves
+					@dragNode = curve.nodeAtMouse @pan
+					if @dragNode
+						@dragNode.isSelected = true
+						break
 				
-				if not @dragNode
 					@dragControl = curve.controlAtMouse @pan
-					@dragControl.isSelected = true if @dragControl
-			
-			if not @dragNode and not @dragControl
-				if @disectionNode.isUnderMouse @pan
-					@createNode( )
-				else
-					@dragPan = v core.canvasMouse( )
+					if @dragControl
+						@dragControl.isSelected = true
+						break
+							
+				if not @dragNode and not @dragControl
+					if @disectionNode.isUnderMouse @pan
+						@createNode( )
+					else
+						@dragPan = v core.canvasMouse( )
 				
 		# stop dragging	
 		if core.input.released 'left-mouse'
@@ -163,6 +206,7 @@ class App extends core.App
 		if core.input.pressed 'right-mouse'
 			for curve in @curves
 				node = curve.nodeAtMouse @pan
+				break if node
 				
 			if node
 				# pop up a context menu on the selected node
@@ -264,9 +308,26 @@ class App extends core.App
 			ctx.moveTo bar*@barLength/4 - (Math.floor (@pan.x / @barLength)) * @barLength, 0
 			ctx.lineTo bar*@barLength/4 - (Math.floor (@pan.x / @barLength)) * @barLength, @height
 			ctx.stroke( )
-		
+				
 		ctx.restore( )
 		
+		
+		if @pushMode
+			point = core.canvasMouse( )
+			# draw stretch bar
+
+			ctx.strokeStyle = "rgb(224,224,224)"
+			ctx.fillStyle = "rgba(224,224,224,0.06)"
+			
+			if @pushStart
+				ctx.beginPath( )
+				ctx.fillRect @width, 0, point.x - @width, @height
+			
+			ctx.beginPath( )
+			ctx.moveTo point.x, 0
+			ctx.lineTo point.x, @height
+			ctx.stroke( )
+			
 		
 		ctx.save( )
 		ctx.translate @pan.x, @pan.y
@@ -282,7 +343,7 @@ class App extends core.App
 		if not @debug
 			for curve in @curves
 				curve.drawNodes( )
-		
+			
 		# draw flattened lines
 		if @debug
 			for curve in @curves

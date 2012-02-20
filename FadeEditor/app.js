@@ -23,17 +23,35 @@ App = (function(_super) {
     this.zoom = 1.0;
     this.curves = [];
     this.maxPanX = 64;
-    for (i = 0; i <= 0; i++) {
+    for (i = 0; 0 <= numCurves ? i <= numCurves : i >= numCurves; 0 <= numCurves ? i++ : i--) {
       this.curves.push(new Curve(this.curveSpacing + i * (this.curveSpacing + this.curveHeight)));
     }
     this.dragNode = null;
     this.dragControl = null;
+    this.pushDrag = null;
+    this.pushStart = null;
+    this.pushMode = false;
     this.disectionNode = new DisectionNode();
   }
 
   App.prototype.updateDragging = function(dt) {
-    var diff, mouse;
-    if (this.dragPan) {
+    var curve, diff, mouse, _i, _len, _ref;
+    if (this.pushDrag) {
+      mouse = v.sub(core.canvasMouse(), this.pan);
+      diff = v.sub(mouse, this.pushDrag);
+      this.pushDrag = mouse;
+      _ref = this.curves;
+      for (_i = 0, _len = _ref.length; _i < _len; _i++) {
+        curve = _ref[_i];
+        if (core.input.down('precision')) {
+          curve.stretch(mouse.x, diff.x);
+        } else if (mouse.y > curve.topOffset && mouse.y < curve.topOffset + curve.height) {
+          curve.stretch(mouse.x, diff.x);
+          break;
+        }
+      }
+      return this.invalidate();
+    } else if (this.dragPan) {
       mouse = core.canvasMouse();
       diff = v.sub(mouse, this.dragPan);
       this.pan = v.add(diff, this.pan);
@@ -62,7 +80,9 @@ App = (function(_super) {
     if (this.dragControl) this.dragControl.isSelected = false;
     this.dragNode = null;
     this.dragControl = null;
-    return this.dragPan = null;
+    this.dragPan = null;
+    this.pushDrag = null;
+    return this.pushStart = null;
   };
 
   App.prototype.createNode = function() {
@@ -84,14 +104,29 @@ App = (function(_super) {
   };
 
   App.prototype.update = function(dt) {
-    var curve, menu, menuPos, mouse, node, _i, _j, _k, _len, _len2, _len3, _ref, _ref2, _ref3;
+    var $canvas, curve, menu, menuPos, mouse, node, _i, _j, _k, _len, _len2, _len3, _ref, _ref2, _ref3;
     mouse = v.sub(core.canvasMouse(), this.pan);
+    if (core.input.pressed('push')) {
+      $canvas = $(canvas);
+      $canvas.css('cursor', 'ew-resize');
+      this.pushMode = true;
+    } else if (core.input.released('push')) {
+      $(canvas).css('cursor', 'auto');
+      this.pushMode = false;
+    }
+    if (!core.input.down('push')) this.prevPushCursor = null;
+    if (core.input.pressed('precision')) {
+      $canvas = $(canvas);
+      $canvas.css('cursor', 'crosshair');
+    } else if (core.input.released('precision')) {
+      $(canvas).css('cursor', 'auto');
+    }
     _ref = this.curves;
     for (_i = 0, _len = _ref.length; _i < _len; _i++) {
       curve = _ref[_i];
       if (mouse.y > curve.topOffset && mouse.y < curve.topOffset + curve.height) {
         this.disectionNode.move(mouse.x, curve.firstNode);
-        if (this.disectionNode.coord && !v.eq(mouse, this.lastMouse)) {
+        if (this.lastMouse && this.disectionNode.coord && !v.eq(mouse, this.lastMouse)) {
           this.invalidate();
         }
       }
@@ -123,21 +158,32 @@ App = (function(_super) {
     if (core.input.pressed('left-mouse')) {
       $('.context-menu').fadeOut('fast');
       this.resetDrag();
-      _ref2 = this.curves;
-      for (_j = 0, _len2 = _ref2.length; _j < _len2; _j++) {
-        curve = _ref2[_j];
-        this.dragNode = curve.nodeAtMouse(this.pan);
-        if (this.dragNode) this.dragNode.isSelected = true;
-        if (!this.dragNode) {
+      if (core.input.down('push')) {
+        this.pushDrag = mouse;
+        this.pushStart = mouse;
+      } else if (core.input.down('precision')) {
+        this.createNode();
+      } else {
+        _ref2 = this.curves;
+        for (_j = 0, _len2 = _ref2.length; _j < _len2; _j++) {
+          curve = _ref2[_j];
+          this.dragNode = curve.nodeAtMouse(this.pan);
+          if (this.dragNode) {
+            this.dragNode.isSelected = true;
+            break;
+          }
           this.dragControl = curve.controlAtMouse(this.pan);
-          if (this.dragControl) this.dragControl.isSelected = true;
+          if (this.dragControl) {
+            this.dragControl.isSelected = true;
+            break;
+          }
         }
-      }
-      if (!this.dragNode && !this.dragControl) {
-        if (this.disectionNode.isUnderMouse(this.pan)) {
-          this.createNode();
-        } else {
-          this.dragPan = v(core.canvasMouse());
+        if (!this.dragNode && !this.dragControl) {
+          if (this.disectionNode.isUnderMouse(this.pan)) {
+            this.createNode();
+          } else {
+            this.dragPan = v(core.canvasMouse());
+          }
         }
       }
     }
@@ -147,6 +193,7 @@ App = (function(_super) {
       for (_k = 0, _len3 = _ref3.length; _k < _len3; _k++) {
         curve = _ref3[_k];
         node = curve.nodeAtMouse(this.pan);
+        if (node) break;
       }
       if (node) {
         menuPos = v.add(core.toGlobal(node), this.pan);
@@ -202,7 +249,7 @@ App = (function(_super) {
   };
 
   App.prototype.draw = function() {
-    var bar, currY, curve, line, _i, _j, _k, _l, _len, _len2, _len3, _len4, _len5, _m, _ref, _ref2, _ref3, _ref4, _ref5, _ref6;
+    var bar, currY, curve, line, point, _i, _j, _k, _l, _len, _len2, _len3, _len4, _len5, _m, _ref, _ref2, _ref3, _ref4, _ref5, _ref6;
     App.__super__.draw.call(this);
     this.drawBackground();
     this.drawGrid();
@@ -241,6 +288,19 @@ App = (function(_super) {
       ctx.stroke();
     }
     ctx.restore();
+    if (this.pushMode) {
+      point = core.canvasMouse();
+      ctx.strokeStyle = "rgb(224,224,224)";
+      ctx.fillStyle = "rgba(224,224,224,0.06)";
+      if (this.pushStart) {
+        ctx.beginPath();
+        ctx.fillRect(this.width, 0, point.x - this.width, this.height);
+      }
+      ctx.beginPath();
+      ctx.moveTo(point.x, 0);
+      ctx.lineTo(point.x, this.height);
+      ctx.stroke();
+    }
     ctx.save();
     ctx.translate(this.pan.x, this.pan.y);
     _ref3 = this.curves;
@@ -317,7 +377,7 @@ Compiler = (function() {
     var outputCode;
     outputCode = 'uint8_t gamma[' + this.gammaTableSize + '] = {\n';
     outputCode += this.gammaTable.join(',\n');
-    outputCode += '};\n';
+    outputCode += '\n};\n';
     return outputCode;
   };
 
@@ -325,7 +385,7 @@ Compiler = (function() {
     var coordCode, outputCode, path, pathCode, pathID, _i, _len, _ref;
     outputCode = 'typedef struct {\n	// 256 = 1 second\n	uint16_t t;\n	\n	// 255 = 100%\n	uint8_t dutyCycle;\n} pwmKeyframe_t;';
     coordCode = function(coord) {
-      return '{' + coord.x + ',' + coord.y + '}';
+      return '{' + (Math.floor(coord.x)) + ',' + (Math.floor(coord.y)) + '}';
     };
     pathID = 0;
     _ref = this.paths;
@@ -621,6 +681,21 @@ Curve = (function() {
       ctx.fill();
       return ctx.stroke();
     }
+  };
+
+  Curve.prototype.stretch = function(fromX, byX) {
+    var node, _results;
+    node = this.lastNode;
+    _results = [];
+    while (node !== null) {
+      if (node.x >= fromX) {
+        node.moveTo(v(node.x + byX, node.y));
+      } else {
+        break;
+      }
+      _results.push(node = node.prev);
+    }
+    return _results;
   };
 
   Curve.prototype.getNodes = function() {
@@ -920,6 +995,8 @@ run = function() {
   core.input.bind(core.button.RIGHT, 'right-mouse');
   core.input.bind(core.button.LEFT, 'left-mouse');
   core.input.bind(core.key.D, 'debug');
+  core.input.bind(core.key.SHIFT, 'push');
+  core.input.bind(core.key.CTRL, 'precision');
   app = new App();
   app.run();
   $('#item-smooth-node').click(function() {

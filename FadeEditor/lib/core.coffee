@@ -41,8 +41,7 @@ core.input = {
 	released: (action) -> (action in @_released)
 
 	onmousemove: (e) ->
-		@mouse.x = e.pageX - core.canvas.offsetLeft
-		@mouse.y = e.pageY - core.canvas.offsetTop
+		@mouse = core.toCanvas { x: e.pageX, y: e.pageY }
 	onmousedown: (e) -> @onkeydown(e)
 	onmouseup: (e) -> @onkeyup(e)
 	onmousewheel: (e) ->
@@ -72,10 +71,29 @@ core.registerApp = (app) ->
 core.screenMouse = ->
 	core.toGlobal core.input.mouse
 	
-core.toGlobal = (coord)->
+core.scrollPos = ->
+	node = core.canvas
+	offsetLeft = 0
+	offsetTop = 0
+	while node
+		offsetLeft += $(node).scrollLeft( )
+		offsetTop += $(node).scrollTop( )
+		node = node.parentNode
+	return { x: offsetLeft, y: offsetTop }
+
+core.toCanvas = (coord) ->
+	scroll = core.scrollPos( )
+	console.log scroll.x, scroll.y
 	{
-		x: core.canvas.offsetLeft + coord.x,
-		y: core.canvas.offsetTop + coord.y
+		x: coord.x - core.canvas.offsetLeft + scroll.x,
+		y: coord.y - core.canvas.offsetTop + scroll.y
+	}
+	
+core.toGlobal = (coord)->
+	scroll = core.scrollPos( )
+	{
+		x: -scroll.x + core.canvas.offsetLeft + coord.x,
+		y: -scroll.y + core.canvas.offsetTop + coord.y
 	}
 	
 core.canvasMouse = ->
@@ -107,6 +125,9 @@ core.key =
 	UP_ARROW: 38
 	RIGHT_ARROW: 39
 	DOWN_ARROW: 40
+	SHIFT: 16
+	CTRL: 17
+	ALT: 18
 	
 ascii = (c) -> c.charCodeAt 0
 

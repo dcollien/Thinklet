@@ -61,8 +61,10 @@ core.input = {
     return __indexOf.call(this._released, action) >= 0;
   },
   onmousemove: function(e) {
-    this.mouse.x = e.pageX - core.canvas.offsetLeft;
-    return this.mouse.y = e.pageY - core.canvas.offsetTop;
+    return this.mouse = core.toCanvas({
+      x: e.pageX,
+      y: e.pageY
+    });
   },
   onmousedown: function(e) {
     return this.onkeydown(e);
@@ -112,10 +114,38 @@ core.screenMouse = function() {
   return core.toGlobal(core.input.mouse);
 };
 
-core.toGlobal = function(coord) {
+core.scrollPos = function() {
+  var node, offsetLeft, offsetTop;
+  node = core.canvas;
+  offsetLeft = 0;
+  offsetTop = 0;
+  while (node) {
+    offsetLeft += $(node).scrollLeft();
+    offsetTop += $(node).scrollTop();
+    node = node.parentNode;
+  }
   return {
-    x: core.canvas.offsetLeft + coord.x,
-    y: core.canvas.offsetTop + coord.y
+    x: offsetLeft,
+    y: offsetTop
+  };
+};
+
+core.toCanvas = function(coord) {
+  var scroll;
+  scroll = core.scrollPos();
+  console.log(scroll.x, scroll.y);
+  return {
+    x: coord.x - core.canvas.offsetLeft + scroll.x,
+    y: coord.y - core.canvas.offsetTop + scroll.y
+  };
+};
+
+core.toGlobal = function(coord) {
+  var scroll;
+  scroll = core.scrollPos();
+  return {
+    x: -scroll.x + core.canvas.offsetLeft + coord.x,
+    y: -scroll.y + core.canvas.offsetTop + coord.y
   };
 };
 
@@ -149,7 +179,10 @@ core.key = {
   LEFT_ARROW: 37,
   UP_ARROW: 38,
   RIGHT_ARROW: 39,
-  DOWN_ARROW: 40
+  DOWN_ARROW: 40,
+  SHIFT: 16,
+  CTRL: 17,
+  ALT: 18
 };
 
 ascii = function(c) {

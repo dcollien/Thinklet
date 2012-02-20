@@ -35,7 +35,7 @@ class Compiler
 	generateGammaTableCode: ->
 		outputCode = 'uint8_t gamma[' + @gammaTableSize + '] = {\n'
 		outputCode += @gammaTable.join ',\n'
-		outputCode += '};\n'
+		outputCode += '\n};\n'
 		
 		return outputCode
 		
@@ -51,7 +51,7 @@ class Compiler
 		'''
 		
 		coordCode = (coord) ->
-			'{' + coord.x + ',' + coord.y + '}'
+			'{' + (Math.floor coord.x) + ',' + (Math.floor coord.y) + '}'
 		
 		pathID = 0
 		for path in @paths

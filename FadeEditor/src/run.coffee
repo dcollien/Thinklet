@@ -12,19 +12,22 @@ nodeColors = {
 
 run = ->
 	# TODO:
-	# - forward pushing
-	# - multiple curves
-	# - new class to handle compilation (machine code/ihex) and calc duty cycle here
 	# - timing text
 	# - curves with selectable colour
 	# - play marker and playback (simulation)
 	# - minimap
 	# - option to correct for gamma (on chip side)
 	# - option to control compile accuracy
+	# - compile to ihex or bin
 	# - compiler has knowledge of memory limit
-	# - sub-patterns and looping
 	# - easier disection node selection on near-vertical lines (y selection as well as x)
-	# - make length limit 65535
+	# - make length limit at 65535
+	# - looping and halting patterns
+	# - snap to grid
+	# - numeric input
+	# - save and load
+	# - node drag preview
+	# - sub-patterns and looping
 	
 	compiler = new Compiler
 
@@ -35,7 +38,8 @@ run = ->
 	core.input.bind core.button.RIGHT, 'right-mouse'
 	core.input.bind core.button.LEFT, 'left-mouse'
 	core.input.bind core.key.D, 'debug'
-
+	core.input.bind core.key.SHIFT, 'push'
+	core.input.bind core.key.CTRL, 'precision'
 
 	app = new App( )
 	app.run( )

@@ -215,6 +215,16 @@ class Curve
 			ctx.fill( )
 			ctx.stroke( )
 			
+	stretch: (fromX, byX) ->
+		node = @lastNode
+		while node != null
+			if node.x >= fromX
+				node.moveTo (v (node.x + byX), node.y)
+			else
+				# no more nodes past this x
+				break
+			node = node.prev
+			
 	getNodes: ->
 		# get an array of the nodes 
 		# from the linked list representation
