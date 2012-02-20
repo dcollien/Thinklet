@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<link rel="stylesheet" href="lib/bootstrap/css/bootstrap.min.css" type="text/css" media="screen" charset="utf-8">
+<style>
+.flexbox {
+	display: -webkit-box;
+	-webkit-box-orient: horizontal;
+	-webkit-box-pack: center;
+	-webkit-box-align: center;
+	
+	display: -moz-box;
+	-moz-box-orient: horizontal;
+	-moz-box-pack: center;
+	-moz-box-align: center;
+
+	display: box;
+	box-orient: horizontal;
+	box-pack: center;
+	box-align: center;
+}
+
+.centerbox {
+	width: 100%;
+	height: 100%;
+	margin: 0; padding: 0;
+	
+	overflow-y: auto;
+}
+
+.canvasContainer {
+	width: 800px;
+	height: 100%;
+	
+	padding: 0px;
+	margin: 0px;
+	overflow-x: auto;
+}
+
+.curveTitles {
+	float: left;
+	padding-top: 16px;
+	padding-bottom: 16px;
+	
+	background-color: #ddd;
+	width: 64px;
+	height: 100%;
+	
+	border: 1px solid #aaa;
+}
+
+.curveTitle {
+	height: 288px;
+	font-weight: bold;
+}
+
+
+
+body, html { width: 100%; height: 100%; padding: 0; margin: 0; }
+canvas {
+	border-radius: 6px;
+	box-shadow: 0 0 6px #777;
+}
+body {
+	background-color: #eee;
+}
+
+.context-menu {
+	position: absolute;
+	background-color: #EEE;
+	border: 1px solid black;
+	border-radius: 0px 10px 10px 10px;
+	padding: 4px;
+	
+	opacity: 0.9;
+	-moz-opacity: 0.9;
+	filter:alpha(opacity=90);
+}
+
+.menu-item {
+	cursor: pointer;
+	margin-left: 1px;
+	padding-left: 5px;
+	padding-right: 5px;
+	border-radius: 5px;
+}
+
+.menu-item:hover {
+	background-color: #ccc;
+}
+
+.menu-box {
+	position: absolute;
+	top: 10px;
+	left: 10px;
+}
+</style>
+<div class="centerbox flexbox">
+	<div>
+		<div class="curveTitles">
+			<div class="curveTitle flexbox" id="curve0">
+				Curve 0
+			</div>
+			
+			<div class="curveTitle flexbox" id="curve0">
+				Curve 1
+			</div>
+			
+			<div class="curveTitle flexbox" id="curve0">
+				Curve 2
+			</div>
+			
+			<div class="curveTitle flexbox" id="curve0">
+				Curve 3
+			</div>
+			
+			<div class="curveTitle flexbox" id="curve0">
+				Curve 4
+			</div>
+			
+			<div class="curveTitle flexbox" id="curve0">
+				Curve 5
+			</div>
+		</div>
+		<div class="canvasContainer">
+			<canvas></canvas>
+		</div>
+		
+	</div>
+</div>
+<div class="context-menu hide">
+	<ul>
+		<li class="menu-item" id="item-smooth-node" style="list-style:disc;color:#0f0"><span style="color:black">Smooth</span></li>
+		<li class="menu-item" id="item-symmetric-node" style="list-style:disc;color:#f0f"><span style="color:black">Symmetric</span></li>
+		<li class="menu-item" id="item-sharp-node" style="list-style:square;color:#f00"><span style="color:black">Sharp</span></li>
+		<li class="menu-item" id="item-flat-node" style="list-style:square;color:#ff0"><span style="color:black">Flat</span></li>
+		<li class="menu-item" id="item-remove-node" style="list-style-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAcAAAAHCAYAAADEUlfTAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAIGNIUk0AAHolAACAgwAA+f8AAIDpAAB1MAAA6mAAADqYAAAXb5JfxUYAAABNSURBVHjaXI7BDcAwCAMvyQjMyQ6dAbZiKfqoUK34g2zJh1dENIC7M8pMAPYdzAVY3d0ajNz9aypS/b5R6o+ZPdqoKgCq6h80KH3xDgBqNR97p8oAGQAAAABJRU5ErkJggg==);"><span style="color:black">Remove</span></li>
+		<li class="menu-item" id="item-reset-node" style="list-style:circle;color:#000"><span style="color:black">Reset</span></li>
+	</ul>
+</div>
+<div class="menu-box">
+	<div class="btn btn-primary" id="compile-button">Do Stuff</div>
+	<br/><br/>
+	<textarea id="compile-output" rows="20">
+	</textarea>
+</div>
+<script src="lib/jquery.js"></script>
+<script src="lib/bootstrap/js/bootstrap.min.js"></script>
+<script src="lib/core.js"></script>
+<script src="lib/math.js"></script>
+<script src="app.js"></script>
+<script>
+run( );
+</script>

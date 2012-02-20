@@ -1,552 +1,6 @@
-var App, ControlNode, Curve, CurveNode, DisectionNode, app, canvas, ctx, flattenBy, nodeColors,
+var App, Compiler, ControlNode, Curve, CurveNode, DisectionNode, canvas, ctx, flattenBy, nodeColors, run,
   __hasProp = Object.prototype.hasOwnProperty,
   __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor; child.__super__ = parent.prototype; return child; };
-
-canvas = core.canvas;
-
-ctx = core.ctx;
-
-flattenBy = 4;
-
-nodeColors = {
-  smooth: "rgb(0,255,0)",
-  sharp: "rgb(255,0,0)",
-  flat: "rgb(255,255,0)",
-  symmetric: "rgb(255,0,255)"
-};
-
-DisectionNode = (function() {
-
-  function DisectionNode() {
-    this.radius = 2;
-    this.clickRadius = 8;
-    this.coord = null;
-    this.bezierParameter;
-  }
-
-  DisectionNode.prototype.draw = function() {
-    var coord, offset;
-    if (this.coord) {
-      coord = this.coord;
-      offset = this.radius;
-      ctx.fillStyle = "rgba(255,255,255, 0.5)";
-      ctx.strokeStyle = "rgb(0,0,0)";
-      ctx.beginPath();
-      ctx.arc(coord.x, coord.y, this.radius, 0, TAU);
-      return ctx.fill();
-    }
-  };
-
-  DisectionNode.prototype.move = function(x, firstNode) {
-    var currNode, _results;
-    currNode = firstNode;
-    this.coord = null;
-    _results = [];
-    while (currNode !== null && currNode.next !== null) {
-      if (x > currNode.x && x < currNode.next.x) {
-        this.bezierParameter = cubicBezierAtX(x, currNode, currNode.controlRight, currNode.next.controlLeft, currNode.next);
-        this.coord = cubicBezier(this.bezierParameter, currNode, currNode.controlRight, currNode.next.controlLeft, currNode.next);
-        break;
-      }
-      _results.push(currNode = currNode.next);
-    }
-    return _results;
-  };
-
-  DisectionNode.prototype.isUnderMouse = function(pan) {
-    var mouse;
-    mouse = v.sub(core.canvasMouse(), pan);
-    if (!this.coord) return false;
-    return (v.sub(mouse, this.coord)).len() < this.clickRadius;
-  };
-
-  return DisectionNode;
-
-})();
-
-ControlNode = (function() {
-
-  function ControlNode(coord, parentNode, type) {
-    this.parentNode = parentNode;
-    this.type = type;
-    this.moveTo(coord);
-    this.isSelected = false;
-  }
-
-  ControlNode.prototype.oppositeType = function() {
-    if (this.type === 'left') {
-      return 'right';
-    } else {
-      return 'left';
-    }
-  };
-
-  ControlNode.prototype.constrain = function(coord) {
-    if (this.type === 'left') {
-      if (coord.x > this.parentNode.x) coord.x = this.parentNode.x;
-      if (this.parentNode.prev && coord.x < this.parentNode.prev.x) {
-        coord.x = this.parentNode.prev.x;
-      }
-    } else {
-      if (coord.x < this.parentNode.x) coord.x = this.parentNode.x;
-      if (this.parentNode.next && coord.x > this.parentNode.next.x) {
-        coord.x = this.parentNode.next.x;
-      }
-    }
-    if (coord.y < this.parentNode.curve.topOffset) {
-      coord.y = this.parentNode.curve.topOffset;
-    } else if (coord.y > this.parentNode.curve.topOffset + this.parentNode.curve.height) {
-      coord.y = this.parentNode.curve.topOffset + this.parentNode.curve.height;
-    }
-    return coord;
-  };
-
-  ControlNode.prototype.smooth = function() {
-    var coord, distance, newParentAngle, newUnitVect, newVect, newVectFromParent, otherNode;
-    coord = v(this);
-    otherNode = this.parentNode.getControlNode(this.oppositeType());
-    if (otherNode && (v.sub(this.parentNode, this)).len() > 0) {
-      newParentAngle = (v.sub(this.parentNode, coord)).angle();
-      if (this.parentNode.style === 'symmetric') {
-        distance = (v.sub(this.parentNode, this)).len();
-      } else {
-        distance = (v.sub(this.parentNode, otherNode)).len();
-      }
-      newUnitVect = v.forAngle(newParentAngle);
-      newVectFromParent = v.mul(newUnitVect, distance);
-      newVect = v.add(this.parentNode, newVectFromParent);
-      return otherNode.moveTo(newVect);
-    }
-  };
-
-  ControlNode.prototype.moveTo = function(coord) {
-    coord = this.constrain(coord);
-    this.x = coord.x;
-    return this.y = coord.y;
-  };
-
-  return ControlNode;
-
-})();
-
-CurveNode = (function() {
-
-  function CurveNode(curve, coord, leftCP, rightCP) {
-    this.curve = curve;
-    this.moveTo(coord);
-    this.isSelected = false;
-    if (leftCP) this.controlLeft = new ControlNode(leftCP, this, 'left');
-    if (rightCP) this.controlRight = new ControlNode(rightCP, this, 'right');
-    this.style = 'smooth';
-    this.next = null;
-    this.prev = null;
-  }
-
-  CurveNode.prototype.canRemove = function() {
-    return this.prev !== null && this.next !== null;
-  };
-
-  CurveNode.prototype.remove = function() {
-    var newControlPositions, t;
-    if (!this.canRemove) return;
-    t = approxBezierDisectionParameter(this.controlLeft, this, this.controlRight);
-    newControlPositions = invertedCubicDeCasteljau(t, this.prev, this.prev.controlRight, this.next.controlLeft, this.next);
-    if (this.prev.controlRight) {
-      this.prev.controlRight.moveTo(newControlPositions[0]);
-    }
-    if (this.next.controlLeft) {
-      this.next.controlLeft.moveTo(newControlPositions[1]);
-    }
-    this.next.prev = this.prev;
-    return this.prev.next = this.next;
-  };
-
-  CurveNode.prototype.getControlNode = function(type) {
-    if (type === 'left') return this.controlLeft;
-    if (type === 'right') return this.controlRight;
-  };
-
-  CurveNode.prototype.flatten = function() {
-    if (this.controlLeft) {
-      this.controlLeft.x = this.x;
-      this.controlLeft.y = this.y;
-    }
-    if (this.controlRight) {
-      this.controlRight.x = this.x;
-      return this.controlRight.y = this.y;
-    }
-  };
-
-  CurveNode.prototype.reset = function() {
-    this.controlLeft.moveTo(v(this.x - 32, this.y));
-    this.controlRight.moveTo(v(this.x + 32, this.y));
-    if (this.style === 'smooth' || this.style === 'symmetric') {
-      return this.smooth();
-    } else if (this.style !== 'flat') {
-      return this.flatten();
-    }
-  };
-
-  CurveNode.prototype.smooth = function() {
-    var distance, leftOffset, leftUnit, leftVect, rightOffset, rightUnit, rightVect;
-    if (this.controlLeft && v.eq(this.controlLeft, this)) this.reset();
-    if (this.controlRight && v.eq(this.controlRight, this)) this.reset();
-    if (this.controlLeft && this.controlRight) {
-      leftOffset = v.sub(this, this.controlLeft);
-      rightOffset = v.sub(this, this.controlRight);
-      leftUnit = v.unit(leftOffset);
-      rightUnit = v.unit(rightOffset);
-      leftVect = v.unit(v.sub(rightUnit, leftUnit));
-      rightVect = v.unit(v.sub(leftUnit, rightUnit));
-      if (this.style === 'symmetric') {
-        distance = (leftOffset.len() + rightOffset.len()) / 2;
-        leftVect = v.mul(leftVect, distance);
-        rightVect = v.mul(rightVect, distance);
-      } else {
-        leftVect = v.mul(leftVect, leftOffset.len());
-        rightVect = v.mul(rightVect, rightOffset.len());
-      }
-      leftVect = v.add(this, leftVect);
-      rightVect = v.add(this, rightVect);
-      this.controlLeft.moveTo(leftVect);
-      return this.controlRight.moveTo(rightVect);
-    }
-  };
-
-  CurveNode.prototype.moveTo = function(coord) {
-    var constrained, newControlX, nodeMove;
-    nodeMove = v.sub(coord, this);
-    constrained = false;
-    if (this === this.curve.firstNode) coord.x = 0;
-    if (this.controlRight) {
-      newControlX = this.controlRight.x + nodeMove.x;
-      if (this.next && newControlX > this.next.x) {
-        coord.x = this.next.x - (newControlX - coord.x);
-        constrained = true;
-      }
-      /*	
-      			newControlY = (@controlRight.y + nodeMove.y)
-      			if newControlY < @curve.topOffset
-      				coord.y = @curve.topOffset - (newControlY - coord.y)
-      */
-    }
-    if (this.controlLeft) {
-      newControlX = this.controlLeft.x + nodeMove.x;
-      if (this.prev && newControlX < this.prev.x) {
-        coord.x = this.prev.x - (newControlX - coord.x);
-        constrained = true;
-      }
-      /*	
-      			newControlY = (@controlLeft.y + nodeMove.y)
-      			if newControlY < @curve.topOffset
-      				coord.y = @curve.topOffset - (newControlY - coord.y)
-      */
-    }
-    if (this.next && coord.x > this.next.controlLeft.x) {
-      coord.x = this.next.controlLeft.x;
-      constrained = true;
-    }
-    if (this.prev && coord.x < this.prev.controlRight.x) {
-      coord.x = this.prev.controlRight.x;
-      constrained = true;
-    }
-    if (coord.y < this.curve.topOffset) {
-      coord.y = this.curve.topOffset;
-      constrained = true;
-    } else if (coord.y > this.curve.topOffset + this.curve.height) {
-      coord.y = this.curve.topOffset + this.curve.height;
-      constrained = true;
-    }
-    nodeMove = v.sub(coord, this);
-    this.x = coord.x;
-    this.y = coord.y;
-    if (this.controlLeft) {
-      this.controlLeft.moveTo(v.add(this.controlLeft, nodeMove));
-    }
-    if (this.controlRight) {
-      this.controlRight.moveTo(v.add(this.controlRight, nodeMove));
-    }
-    if ((this.style === 'smooth' || this.style === 'symmetric') && this.controlLeft && this.controlRight) {
-      if (constrained) this.smooth();
-      if (this.controlLeft.y <= this.curve.topOffset || this.controlLeft.y >= this.curve.topOffset + this.curve.height) {
-        return this.smooth();
-      } else if (this.controlRight.y <= this.curve.topOffset || this.controlRight.y >= this.curve.topOffset + this.curve.height) {
-        return this.smooth();
-      }
-    }
-  };
-
-  return CurveNode;
-
-})();
-
-Curve = (function() {
-
-  function Curve(topOffset) {
-    this.topOffset = topOffset;
-    this.height = 256;
-    this.color = "rgb(0,0,255)";
-    this.firstNode = null;
-    this.lastNode = null;
-    this.addNode(v(0, this.height / 2 + this.topOffset), null, v(128, this.height / 2 + this.topOffset));
-    this.addNode(v(this.height * 3, this.height / 2 + this.topOffset), v(this.height * 3 - 128, this.height / 2 + this.topOffset), null);
-    this.debug = false;
-  }
-
-  Curve.prototype.outputLines = function(threshold, steps) {
-    var line, lines, output, _i, _len;
-    lines = this.flatten(threshold, steps);
-    output = [];
-    for (_i = 0, _len = lines.length; _i < _len; _i++) {
-      line = lines[_i];
-      output.push([v(line[0].x, line[0].y - this.topOffset), v(line[1].x, line[1].y - this.topOffset)]);
-    }
-    return output;
-  };
-
-  Curve.prototype.flatten = function(threshold, steps) {
-    var currNode, end, lines, newLines, start;
-    lines = [];
-    currNode = this.firstNode;
-    while (currNode !== null && currNode.next !== null) {
-      start = currNode;
-      end = currNode.next;
-      newLines = this.flattenBezier(start, start.controlRight, end.controlLeft, end, threshold, steps);
-      lines = lines.concat(newLines);
-      currNode = currNode.next;
-    }
-    return lines;
-  };
-
-  Curve.prototype.flattenBezier = function(p0, p1, p2, p3, threshold, steps) {
-    var coords, currCoord, lastSegment, lines, offPoints, startCoord, stepSize, t, testLine;
-    if (!threshold) threshold = 2;
-    if (!steps) steps = 128;
-    offPoints = function(coords, line) {
-      var coord, linearError, linearErrorX, linearErrorY, numPoints, _i, _len;
-      numPoints = 0;
-      for (_i = 0, _len = coords.length; _i < _len; _i++) {
-        coord = coords[_i];
-        linearErrorX = Math.abs((lineX(coord.y, line)) - coord.x);
-        linearErrorY = Math.abs((lineY(coord.x, line)) - coord.y);
-        linearError = Math.min(linearErrorX, linearErrorY);
-        if (linearError >= threshold) numPoints += 1;
-      }
-      return numPoints;
-    };
-    lines = [];
-    stepSize = 1 / steps;
-    lastSegment = [v(p0, v(p1))];
-    startCoord = v(p0);
-    coords = [];
-    t = stepSize;
-    while (t < 1) {
-      currCoord = cubicBezier(t, p0, p1, p2, p3);
-      coords.push(currCoord);
-      testLine = [startCoord, currCoord];
-      if ((offPoints(coords, testLine)) > threshold) {
-        lastSegment = [startCoord, currCoord];
-        lines.push(lastSegment);
-        startCoord = currCoord;
-        coords = [];
-      } else {
-        lastSegment = testLine;
-      }
-      t += stepSize;
-    }
-    lastSegment = [startCoord, v(p3)];
-    lines.push(lastSegment);
-    return lines;
-  };
-
-  Curve.prototype.disectAt = function(disectionPoint) {
-    var controls, currNode, node, t, x;
-    x = disectionPoint.x;
-    currNode = this.firstNode;
-    while (currNode !== null && currNode.next !== null) {
-      if (x > currNode.x && x < currNode.next.x) {
-        t = cubicBezierAtX(x, currNode, currNode.controlRight, currNode.next.controlLeft, currNode.next);
-        controls = cubicDeCasteljau(t, currNode, currNode.controlRight, currNode.next.controlLeft, currNode.next);
-        node = new CurveNode(this, disectionPoint, controls[0], controls[1]);
-        currNode.controlRight.moveTo(controls[2]);
-        currNode.next.controlLeft.moveTo(controls[3]);
-        node.prev = currNode;
-        node.next = currNode.next;
-        currNode.next.prev = node;
-        currNode.next = node;
-        return node;
-      } else {
-        currNode = currNode.next;
-      }
-    }
-    return null;
-  };
-
-  Curve.prototype.addNode = function(pos, leftCP, rightCP) {
-    var node;
-    node = new CurveNode(this, pos, leftCP, rightCP);
-    if (this.firstNode === null) {
-      this.firstNode = node;
-      this.lastNode = node;
-    } else {
-      node.prev = this.lastNode;
-      this.lastNode.next = node;
-      this.lastNode = node;
-    }
-    return node;
-  };
-
-  Curve.prototype.drawCurveSegment = function(start, end) {
-    var c1, c2;
-    c1 = start.controlRight;
-    c2 = end.controlLeft;
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = this.color;
-    ctx.beginPath();
-    ctx.moveTo(start.x, start.y);
-    ctx.bezierCurveTo(c1.x, c1.y, c2.x, c2.y, end.x, end.y);
-    return ctx.stroke();
-  };
-
-  Curve.prototype.drawControlLine = function(from, to) {
-    var offset;
-    ctx.lineWidth = 1;
-    ctx.strokeStyle = "rgb(127,127,127)";
-    ctx.beginPath();
-    ctx.moveTo(from.x, from.y);
-    ctx.lineTo(to.x, to.y);
-    ctx.stroke();
-    offset = 3;
-    if (to.isSelected) {
-      ctx.lineWidth = 2;
-      ctx.strokeStyle = "rgb(196,196,196)";
-      ctx.fillStyle = "rgb(195,195,195)";
-    } else {
-      ctx.lineWidth = 1;
-      ctx.strokeStyle = "rgb(63,63,63)";
-      ctx.fillStyle = "rgb(195,195,195)";
-    }
-    ctx.beginPath();
-    ctx.moveTo(to.x - offset, to.y);
-    ctx.lineTo(to.x, to.y - offset);
-    ctx.lineTo(to.x + offset, to.y);
-    ctx.lineTo(to.x, to.y + offset);
-    ctx.lineTo(to.x - offset, to.y);
-    ctx.closePath();
-    ctx.fill();
-    return ctx.stroke();
-  };
-
-  Curve.prototype.drawControlPoints = function(node) {
-    if (node.style !== "flat") {
-      if (node.controlLeft) this.drawControlLine(node, node.controlLeft);
-      if (node.controlRight) return this.drawControlLine(node, node.controlRight);
-    }
-  };
-
-  Curve.prototype.drawNode = function(node) {
-    var brightness, offset, radius, x, y;
-    x = node.x;
-    y = node.y;
-    if (node.isSelected) {
-      ctx.lineWidth = 2;
-      ctx.strokeStyle = "rgb(128,128,128)";
-      brightness = 1;
-    } else {
-      ctx.lineWidth = 1;
-      ctx.strokeStyle = "rgb(63,63,63)";
-      brightness = 0.5;
-    }
-    if (node.style === "sharp" || node.style === "flat") {
-      offset = 2.7;
-      ctx.fillStyle = nodeColors[node.style];
-      ctx.beginPath();
-      ctx.fillRect(x - offset, y - offset, offset * 2, offset * 2);
-      return ctx.strokeRect(x - offset, y - offset, offset * 2, offset * 2);
-    } else if (node.style === "smooth" || node.style === "symmetric") {
-      radius = 3;
-      ctx.fillStyle = nodeColors[node.style];
-      ctx.beginPath();
-      ctx.arc(x, y, radius, 0, TAU);
-      ctx.closePath();
-      ctx.fill();
-      return ctx.stroke();
-    }
-  };
-
-  Curve.prototype.getNodes = function() {
-    var currNode, nodes;
-    nodes = [];
-    currNode = this.firstNode;
-    while (currNode !== null) {
-      nodes.push(currNode);
-      currNode = currNode.next;
-    }
-    return nodes;
-  };
-
-  Curve.prototype.drawSegments = function() {
-    var i, nodes, _ref, _results;
-    nodes = this.getNodes();
-    _results = [];
-    for (i = 0, _ref = nodes.length - 1; 0 <= _ref ? i < _ref : i > _ref; 0 <= _ref ? i++ : i--) {
-      _results.push(this.drawCurveSegment(nodes[i], nodes[i + 1]));
-    }
-    return _results;
-  };
-
-  Curve.prototype.drawNodes = function() {
-    var node, nodes, _i, _j, _len, _len2, _results;
-    nodes = this.getNodes();
-    for (_i = 0, _len = nodes.length; _i < _len; _i++) {
-      node = nodes[_i];
-      this.drawControlPoints(node);
-    }
-    _results = [];
-    for (_j = 0, _len2 = nodes.length; _j < _len2; _j++) {
-      node = nodes[_j];
-      _results.push(this.drawNode(node));
-    }
-    return _results;
-  };
-
-  Curve.prototype.controlAtMouse = function(pan) {
-    var isUnderMouse, node, nodes, radius, _i, _len;
-    radius = 6;
-    isUnderMouse = function(node) {
-      var pannedNode;
-      pannedNode = v.add(pan, node);
-      return (v.sub(core.canvasMouse(), pannedNode)).len() < radius;
-    };
-    nodes = this.getNodes();
-    for (_i = 0, _len = nodes.length; _i < _len; _i++) {
-      node = nodes[_i];
-      if (node.controlLeft && (isUnderMouse(node.controlLeft))) {
-        return node.controlLeft;
-      }
-      if (node.controlRight && (isUnderMouse(node.controlRight))) {
-        return node.controlRight;
-      }
-    }
-    return null;
-  };
-
-  Curve.prototype.nodeAtMouse = function(pan) {
-    var dist, node, pannedNode, radius, _i, _len, _ref;
-    radius = 6;
-    _ref = this.getNodes();
-    for (_i = 0, _len = _ref.length; _i < _len; _i++) {
-      node = _ref[_i];
-      pannedNode = v.add(pan, node);
-      dist = (v.sub(core.canvasMouse(), pannedNode)).len();
-      if (dist < radius) return node;
-    }
-    return null;
-  };
-
-  return Curve;
-
-})();
 
 App = (function(_super) {
 
@@ -832,120 +286,697 @@ App = (function(_super) {
 
 })(core.App);
 
-core.input.bind(core.key.LEFT_ARROW, 'pan-left');
+Compiler = (function() {
 
-core.input.bind(core.key.RIGHT_ARROW, 'pan-right');
-
-core.input.bind(core.key.UP_ARROW, 'pan-up');
-
-core.input.bind(core.key.DOWN_ARROW, 'pan-down');
-
-core.input.bind(core.button.RIGHT, 'right-mouse');
-
-core.input.bind(core.button.LEFT, 'left-mouse');
-
-core.input.bind(core.key.D, 'debug');
-
-app = new App();
-
-app.run();
-
-$('#item-smooth-node').click(function() {
-  var data;
-  data = $('.context-menu').data();
-  if (data.node) {
-    data.node.style = 'smooth';
-    data.node.smooth();
+  function Compiler() {
+    this.maxValue = 255;
+    this.threshold = 4;
+    this.gamma = 2.5;
+    this.gammaTableSize = 64;
   }
-  $('.context-menu').fadeOut('fast');
-  return app.invalidate();
-});
 
-$('#item-sharp-node').click(function() {
-  var data;
-  data = $('.context-menu').data();
-  if (data.node) {
-    if (data.node.style === 'flat') data.node.reset();
-    data.node.style = 'sharp';
-  }
-  $('.context-menu').fadeOut('fast');
-  return app.invalidate();
-});
-
-$('#item-flat-node').click(function() {
-  var data;
-  data = $('.context-menu').data();
-  if (data.node) {
-    data.node.style = 'flat';
-    data.node.flatten();
-  }
-  $('.context-menu').fadeOut('fast');
-  return app.invalidate();
-});
-
-$('#item-symmetric-node').click(function() {
-  var data;
-  data = $('.context-menu').data();
-  if (data.node) {
-    data.node.style = 'symmetric';
-    data.node.smooth();
-  }
-  $('.context-menu').fadeOut('fast');
-  return app.invalidate();
-});
-
-$('#item-remove-node').click(function() {
-  var data;
-  data = $('.context-menu').data();
-  if (data.node) data.node.remove();
-  $('.context-menu').fadeOut('fast');
-  return app.invalidate();
-});
-
-$('#item-reset-node').click(function() {
-  var data;
-  data = $('.context-menu').data();
-  if (data.node) data.node.reset();
-  $('.context-menu').fadeOut('fast');
-  return app.invalidate();
-});
-
-$('#compile-button').click(function() {
-  var barLength, coordToCode, coords, curve, curveHeight, curveNum, curveOutput, curves, gammaCorrectedDutyCycle, lastCoord, lineToCode, lines, linesCode, maxValue, outputCode, outputFunc, pwmBits, _i, _len;
-  pwmBits = 12;
-  curveHeight = 256;
-  barLength = 256;
-  maxValue = (Math.pow(2, pwmBits)) - 1;
-  outputFunc = null;
-  gammaCorrectedDutyCycle = function(value) {
-    var gamma;
-    gamma = 2.5;
-    return Math.floor(maxValue * (Math.pow(value / curveHeight, gamma)));
+  Compiler.prototype.makeGammaTable = function() {
+    var i, _ref, _results;
+    this.gammaTable = [];
+    _results = [];
+    for (i = 0, _ref = this.gammaTableSize; 0 <= _ref ? i < _ref : i > _ref; 0 <= _ref ? i++ : i--) {
+      _results.push(this.gammaTable.push(Math.floor((Math.pow(i / (this.gammaTableSize - 1), this.gamma)) * this.maxValue)));
+    }
+    return _results;
   };
-  coordToCode = function(coord) {
-    var output;
-    output = outputFunc(coord.y);
-    return '{' + ([Math.floor(coord.x), output].join(',')) + '}';
+
+  Compiler.prototype.generatePrelude = function() {
+    return '#include <avr/io.h>\n#include <util/delay.h>';
   };
-  lineToCode = function(line) {
-    return coordToCode(line[0], outputFunc);
+
+  Compiler.prototype.generatePostlude = function() {
+    return 'int main( void ) {\n	DDRB = 1;\n	PORTB = 0;\n	\n	// TODO: set up interrupts\n	// and write code\n	\n	return 0;\n}';
   };
-  curves = app.curves;
-  curveOutput = {};
-  curveNum = 0;
-  outputCode = [];
-  for (_i = 0, _len = curves.length; _i < _len; _i++) {
-    curve = curves[_i];
-    lines = curve.outputLines(flattenBy);
-    curveOutput['curve' + curveNum] = lines;
-    lastCoord = lines[lines.length - 1][1];
-    outputFunc = gammaCorrectedDutyCycle;
-    coords = lines.map(lineToCode);
-    coords = coords.concat([coordToCode(lastCoord, gammaCorrectedDutyCycle)]);
-    linesCode = '{\n' + coords.join(',\n') + '\n}';
-    outputCode.push('typedef struct {\n	// 256 = 1 second\n	uint8_t t;\n	// 4096 = on\n	uint16_t dutyCycle;\n} pwmKeyframe_t;');
-    outputCode.push('pwmKeyframe_t curve' + curveNum + '[' + (lines.length + 1) + '] = ' + linesCode + ';');
-    curveNum += 1;
+
+  Compiler.prototype.generateGammaTableCode = function() {
+    var outputCode;
+    outputCode = 'uint8_t gamma[' + this.gammaTableSize + '] = {\n';
+    outputCode += this.gammaTable.join(',\n');
+    outputCode += '};\n';
+    return outputCode;
+  };
+
+  Compiler.prototype.generatePathCode = function() {
+    var coordCode, outputCode, path, pathCode, pathID, _i, _len, _ref;
+    outputCode = 'typedef struct {\n	// 256 = 1 second\n	uint16_t t;\n	\n	// 255 = 100%\n	uint8_t dutyCycle;\n} pwmKeyframe_t;';
+    coordCode = function(coord) {
+      return '{' + coord.x + ',' + coord.y + '}';
+    };
+    pathID = 0;
+    _ref = this.paths;
+    for (_i = 0, _len = _ref.length; _i < _len; _i++) {
+      path = _ref[_i];
+      pathCode = 'pwmKeyframe_t path' + pathID + '[' + path.length + '] = {\n';
+      pathCode += (path.map(coordCode)).join(',\n');
+      pathCode += '};\n';
+      pathID += 1;
+      outputCode += pathCode;
+    }
+    return outputCode;
+  };
+
+  Compiler.prototype.compile = function(curves) {
+    var curve, height, outputCode, _i, _len;
+    outputCode = this.generatePrelude();
+    if (this.gamma > 1) {
+      this.makeGammaTable();
+      outputCode += this.generateGammaTableCode();
+    }
+    this.paths = [];
+    for (_i = 0, _len = curves.length; _i < _len; _i++) {
+      curve = curves[_i];
+      height = curve.height;
+      this.paths.push(curve.outputNodes());
+    }
+    outputCode += this.generatePathCode();
+    outputCode += this.generatePostlude();
+    return outputCode;
+  };
+
+  return Compiler;
+
+})();
+
+ControlNode = (function() {
+
+  function ControlNode(coord, parentNode, type) {
+    this.parentNode = parentNode;
+    this.type = type;
+    this.moveTo(coord);
+    this.isSelected = false;
   }
-  return $('#compile-output').val(outputCode.join('\n'));
-});
+
+  ControlNode.prototype.oppositeType = function() {
+    if (this.type === 'left') {
+      return 'right';
+    } else {
+      return 'left';
+    }
+  };
+
+  ControlNode.prototype.constrain = function(coord) {
+    if (this.type === 'left') {
+      if (coord.x > this.parentNode.x) coord.x = this.parentNode.x;
+      if (this.parentNode.prev && coord.x < this.parentNode.prev.x) {
+        coord.x = this.parentNode.prev.x;
+      }
+    } else {
+      if (coord.x < this.parentNode.x) coord.x = this.parentNode.x;
+      if (this.parentNode.next && coord.x > this.parentNode.next.x) {
+        coord.x = this.parentNode.next.x;
+      }
+    }
+    if (coord.y < this.parentNode.curve.topOffset) {
+      coord.y = this.parentNode.curve.topOffset;
+    } else if (coord.y > this.parentNode.curve.topOffset + this.parentNode.curve.height) {
+      coord.y = this.parentNode.curve.topOffset + this.parentNode.curve.height;
+    }
+    return coord;
+  };
+
+  ControlNode.prototype.smooth = function() {
+    var coord, distance, newParentAngle, newUnitVect, newVect, newVectFromParent, otherNode;
+    coord = v(this);
+    otherNode = this.parentNode.getControlNode(this.oppositeType());
+    if (otherNode && (v.sub(this.parentNode, this)).len() > 0) {
+      newParentAngle = (v.sub(this.parentNode, coord)).angle();
+      if (this.parentNode.style === 'symmetric') {
+        distance = (v.sub(this.parentNode, this)).len();
+      } else {
+        distance = (v.sub(this.parentNode, otherNode)).len();
+      }
+      newUnitVect = v.forAngle(newParentAngle);
+      newVectFromParent = v.mul(newUnitVect, distance);
+      newVect = v.add(this.parentNode, newVectFromParent);
+      return otherNode.moveTo(newVect);
+    }
+  };
+
+  ControlNode.prototype.moveTo = function(coord) {
+    coord = this.constrain(coord);
+    this.x = coord.x;
+    return this.y = coord.y;
+  };
+
+  return ControlNode;
+
+})();
+
+Curve = (function() {
+
+  function Curve(topOffset) {
+    this.topOffset = topOffset;
+    this.height = 256;
+    this.color = "rgb(0,0,255)";
+    this.firstNode = null;
+    this.lastNode = null;
+    this.addNode(v(0, this.height / 2 + this.topOffset), null, v(128, this.height / 2 + this.topOffset));
+    this.addNode(v(this.height * 3, this.height / 2 + this.topOffset), v(this.height * 3 - 128, this.height / 2 + this.topOffset), null);
+    this.debug = false;
+  }
+
+  Curve.prototype.outputNodes = function(threshold, steps) {
+    var line, lines, output, _i, _len;
+    lines = this.flatten(threshold, steps);
+    output = [];
+    for (_i = 0, _len = lines.length; _i < _len; _i++) {
+      line = lines[_i];
+      output.push(v(line[0].x, line[0].y - this.topOffset));
+    }
+    line = lines[lines.length - 1];
+    output.push(v(line[1].x, line[1].y - this.topOffset));
+    return output;
+  };
+
+  Curve.prototype.flatten = function(threshold, steps) {
+    var currNode, end, lines, newLines, start;
+    lines = [];
+    currNode = this.firstNode;
+    while (currNode !== null && currNode.next !== null) {
+      start = currNode;
+      end = currNode.next;
+      newLines = this.flattenBezier(start, start.controlRight, end.controlLeft, end, threshold, steps);
+      lines = lines.concat(newLines);
+      currNode = currNode.next;
+    }
+    return lines;
+  };
+
+  Curve.prototype.flattenBezier = function(p0, p1, p2, p3, threshold, steps) {
+    var coords, currCoord, lastSegment, lines, offPoints, startCoord, stepSize, t, testLine;
+    if (!threshold) threshold = 2;
+    if (!steps) steps = 128;
+    offPoints = function(coords, line) {
+      var coord, linearError, linearErrorX, linearErrorY, numPoints, _i, _len;
+      numPoints = 0;
+      for (_i = 0, _len = coords.length; _i < _len; _i++) {
+        coord = coords[_i];
+        linearErrorX = Math.abs((lineX(coord.y, line)) - coord.x);
+        linearErrorY = Math.abs((lineY(coord.x, line)) - coord.y);
+        linearError = Math.min(linearErrorX, linearErrorY);
+        if (linearError >= threshold) numPoints += 1;
+      }
+      return numPoints;
+    };
+    lines = [];
+    stepSize = 1 / steps;
+    lastSegment = [v(p0, v(p1))];
+    startCoord = v(p0);
+    coords = [];
+    t = stepSize;
+    while (t < 1) {
+      currCoord = cubicBezier(t, p0, p1, p2, p3);
+      coords.push(currCoord);
+      testLine = [startCoord, currCoord];
+      if ((offPoints(coords, testLine)) > threshold) {
+        lastSegment = [startCoord, currCoord];
+        lines.push(lastSegment);
+        startCoord = currCoord;
+        coords = [];
+      } else {
+        lastSegment = testLine;
+      }
+      t += stepSize;
+    }
+    lastSegment = [startCoord, v(p3)];
+    lines.push(lastSegment);
+    return lines;
+  };
+
+  Curve.prototype.disectAt = function(disectionPoint) {
+    var controls, currNode, node, t, x;
+    x = disectionPoint.x;
+    currNode = this.firstNode;
+    while (currNode !== null && currNode.next !== null) {
+      if (x > currNode.x && x < currNode.next.x) {
+        t = cubicBezierAtX(x, currNode, currNode.controlRight, currNode.next.controlLeft, currNode.next);
+        controls = cubicDeCasteljau(t, currNode, currNode.controlRight, currNode.next.controlLeft, currNode.next);
+        node = new CurveNode(this, disectionPoint, controls[0], controls[1]);
+        currNode.controlRight.moveTo(controls[2]);
+        currNode.next.controlLeft.moveTo(controls[3]);
+        node.prev = currNode;
+        node.next = currNode.next;
+        currNode.next.prev = node;
+        currNode.next = node;
+        return node;
+      } else {
+        currNode = currNode.next;
+      }
+    }
+    return null;
+  };
+
+  Curve.prototype.addNode = function(pos, leftCP, rightCP) {
+    var node;
+    node = new CurveNode(this, pos, leftCP, rightCP);
+    if (this.firstNode === null) {
+      this.firstNode = node;
+      this.lastNode = node;
+    } else {
+      node.prev = this.lastNode;
+      this.lastNode.next = node;
+      this.lastNode = node;
+    }
+    return node;
+  };
+
+  Curve.prototype.drawCurveSegment = function(start, end) {
+    var c1, c2;
+    c1 = start.controlRight;
+    c2 = end.controlLeft;
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = this.color;
+    ctx.beginPath();
+    ctx.moveTo(start.x, start.y);
+    ctx.bezierCurveTo(c1.x, c1.y, c2.x, c2.y, end.x, end.y);
+    return ctx.stroke();
+  };
+
+  Curve.prototype.drawControlLine = function(from, to) {
+    var offset;
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = "rgb(127,127,127)";
+    ctx.beginPath();
+    ctx.moveTo(from.x, from.y);
+    ctx.lineTo(to.x, to.y);
+    ctx.stroke();
+    offset = 3;
+    if (to.isSelected) {
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = "rgb(196,196,196)";
+      ctx.fillStyle = "rgb(195,195,195)";
+    } else {
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = "rgb(63,63,63)";
+      ctx.fillStyle = "rgb(195,195,195)";
+    }
+    ctx.beginPath();
+    ctx.moveTo(to.x - offset, to.y);
+    ctx.lineTo(to.x, to.y - offset);
+    ctx.lineTo(to.x + offset, to.y);
+    ctx.lineTo(to.x, to.y + offset);
+    ctx.lineTo(to.x - offset, to.y);
+    ctx.closePath();
+    ctx.fill();
+    return ctx.stroke();
+  };
+
+  Curve.prototype.drawControlPoints = function(node) {
+    if (node.style !== "flat") {
+      if (node.controlLeft) this.drawControlLine(node, node.controlLeft);
+      if (node.controlRight) return this.drawControlLine(node, node.controlRight);
+    }
+  };
+
+  Curve.prototype.drawNode = function(node) {
+    var brightness, offset, radius, x, y;
+    x = node.x;
+    y = node.y;
+    if (node.isSelected) {
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = "rgb(128,128,128)";
+      brightness = 1;
+    } else {
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = "rgb(63,63,63)";
+      brightness = 0.5;
+    }
+    if (node.style === "sharp" || node.style === "flat") {
+      offset = 2.7;
+      ctx.fillStyle = nodeColors[node.style];
+      ctx.beginPath();
+      ctx.fillRect(x - offset, y - offset, offset * 2, offset * 2);
+      return ctx.strokeRect(x - offset, y - offset, offset * 2, offset * 2);
+    } else if (node.style === "smooth" || node.style === "symmetric") {
+      radius = 3;
+      ctx.fillStyle = nodeColors[node.style];
+      ctx.beginPath();
+      ctx.arc(x, y, radius, 0, TAU);
+      ctx.closePath();
+      ctx.fill();
+      return ctx.stroke();
+    }
+  };
+
+  Curve.prototype.getNodes = function() {
+    var currNode, nodes;
+    nodes = [];
+    currNode = this.firstNode;
+    while (currNode !== null) {
+      nodes.push(currNode);
+      currNode = currNode.next;
+    }
+    return nodes;
+  };
+
+  Curve.prototype.drawSegments = function() {
+    var i, nodes, _ref, _results;
+    nodes = this.getNodes();
+    _results = [];
+    for (i = 0, _ref = nodes.length - 1; 0 <= _ref ? i < _ref : i > _ref; 0 <= _ref ? i++ : i--) {
+      _results.push(this.drawCurveSegment(nodes[i], nodes[i + 1]));
+    }
+    return _results;
+  };
+
+  Curve.prototype.drawNodes = function() {
+    var node, nodes, _i, _j, _len, _len2, _results;
+    nodes = this.getNodes();
+    for (_i = 0, _len = nodes.length; _i < _len; _i++) {
+      node = nodes[_i];
+      this.drawControlPoints(node);
+    }
+    _results = [];
+    for (_j = 0, _len2 = nodes.length; _j < _len2; _j++) {
+      node = nodes[_j];
+      _results.push(this.drawNode(node));
+    }
+    return _results;
+  };
+
+  Curve.prototype.controlAtMouse = function(pan) {
+    var isUnderMouse, node, nodes, radius, _i, _len;
+    radius = 6;
+    isUnderMouse = function(node) {
+      var pannedNode;
+      pannedNode = v.add(pan, node);
+      return (v.sub(core.canvasMouse(), pannedNode)).len() < radius;
+    };
+    nodes = this.getNodes();
+    for (_i = 0, _len = nodes.length; _i < _len; _i++) {
+      node = nodes[_i];
+      if (node.controlLeft && (isUnderMouse(node.controlLeft))) {
+        return node.controlLeft;
+      }
+      if (node.controlRight && (isUnderMouse(node.controlRight))) {
+        return node.controlRight;
+      }
+    }
+    return null;
+  };
+
+  Curve.prototype.nodeAtMouse = function(pan) {
+    var dist, node, pannedNode, radius, _i, _len, _ref;
+    radius = 6;
+    _ref = this.getNodes();
+    for (_i = 0, _len = _ref.length; _i < _len; _i++) {
+      node = _ref[_i];
+      pannedNode = v.add(pan, node);
+      dist = (v.sub(core.canvasMouse(), pannedNode)).len();
+      if (dist < radius) return node;
+    }
+    return null;
+  };
+
+  return Curve;
+
+})();
+
+CurveNode = (function() {
+
+  function CurveNode(curve, coord, leftCP, rightCP) {
+    this.curve = curve;
+    this.moveTo(coord);
+    this.isSelected = false;
+    if (leftCP) this.controlLeft = new ControlNode(leftCP, this, 'left');
+    if (rightCP) this.controlRight = new ControlNode(rightCP, this, 'right');
+    this.style = 'smooth';
+    this.next = null;
+    this.prev = null;
+  }
+
+  CurveNode.prototype.canRemove = function() {
+    return this.prev !== null && this.next !== null;
+  };
+
+  CurveNode.prototype.remove = function() {
+    var newControlPositions, t;
+    if (!this.canRemove) return;
+    t = approxBezierDisectionParameter(this.controlLeft, this, this.controlRight);
+    newControlPositions = invertedCubicDeCasteljau(t, this.prev, this.prev.controlRight, this.next.controlLeft, this.next);
+    if (this.prev.controlRight) {
+      this.prev.controlRight.moveTo(newControlPositions[0]);
+    }
+    if (this.next.controlLeft) {
+      this.next.controlLeft.moveTo(newControlPositions[1]);
+    }
+    this.next.prev = this.prev;
+    return this.prev.next = this.next;
+  };
+
+  CurveNode.prototype.getControlNode = function(type) {
+    if (type === 'left') return this.controlLeft;
+    if (type === 'right') return this.controlRight;
+  };
+
+  CurveNode.prototype.flatten = function() {
+    if (this.controlLeft) {
+      this.controlLeft.x = this.x;
+      this.controlLeft.y = this.y;
+    }
+    if (this.controlRight) {
+      this.controlRight.x = this.x;
+      return this.controlRight.y = this.y;
+    }
+  };
+
+  CurveNode.prototype.reset = function() {
+    this.controlLeft.moveTo(v(this.x - 32, this.y));
+    this.controlRight.moveTo(v(this.x + 32, this.y));
+    if (this.style === 'smooth' || this.style === 'symmetric') {
+      return this.smooth();
+    } else if (this.style !== 'flat') {
+      return this.flatten();
+    }
+  };
+
+  CurveNode.prototype.smooth = function() {
+    var distance, leftOffset, leftUnit, leftVect, rightOffset, rightUnit, rightVect;
+    if (this.controlLeft && v.eq(this.controlLeft, this)) this.reset();
+    if (this.controlRight && v.eq(this.controlRight, this)) this.reset();
+    if (this.controlLeft && this.controlRight) {
+      leftOffset = v.sub(this, this.controlLeft);
+      rightOffset = v.sub(this, this.controlRight);
+      leftUnit = v.unit(leftOffset);
+      rightUnit = v.unit(rightOffset);
+      leftVect = v.unit(v.sub(rightUnit, leftUnit));
+      rightVect = v.unit(v.sub(leftUnit, rightUnit));
+      if (this.style === 'symmetric') {
+        distance = (leftOffset.len() + rightOffset.len()) / 2;
+        leftVect = v.mul(leftVect, distance);
+        rightVect = v.mul(rightVect, distance);
+      } else {
+        leftVect = v.mul(leftVect, leftOffset.len());
+        rightVect = v.mul(rightVect, rightOffset.len());
+      }
+      leftVect = v.add(this, leftVect);
+      rightVect = v.add(this, rightVect);
+      this.controlLeft.moveTo(leftVect);
+      return this.controlRight.moveTo(rightVect);
+    }
+  };
+
+  CurveNode.prototype.moveTo = function(coord) {
+    var constrained, newControlX, nodeMove;
+    nodeMove = v.sub(coord, this);
+    constrained = false;
+    if (this === this.curve.firstNode) coord.x = 0;
+    if (this.controlRight) {
+      newControlX = this.controlRight.x + nodeMove.x;
+      if (this.next && newControlX > this.next.x) {
+        coord.x = this.next.x - (newControlX - coord.x);
+        constrained = true;
+      }
+      /*	
+      			newControlY = (@controlRight.y + nodeMove.y)
+      			if newControlY < @curve.topOffset
+      				coord.y = @curve.topOffset - (newControlY - coord.y)
+      */
+    }
+    if (this.controlLeft) {
+      newControlX = this.controlLeft.x + nodeMove.x;
+      if (this.prev && newControlX < this.prev.x) {
+        coord.x = this.prev.x - (newControlX - coord.x);
+        constrained = true;
+      }
+      /*	
+      			newControlY = (@controlLeft.y + nodeMove.y)
+      			if newControlY < @curve.topOffset
+      				coord.y = @curve.topOffset - (newControlY - coord.y)
+      */
+    }
+    if (this.next && coord.x > this.next.controlLeft.x) {
+      coord.x = this.next.controlLeft.x;
+      constrained = true;
+    }
+    if (this.prev && coord.x < this.prev.controlRight.x) {
+      coord.x = this.prev.controlRight.x;
+      constrained = true;
+    }
+    if (coord.y < this.curve.topOffset) {
+      coord.y = this.curve.topOffset;
+      constrained = true;
+    } else if (coord.y > this.curve.topOffset + this.curve.height) {
+      coord.y = this.curve.topOffset + this.curve.height;
+      constrained = true;
+    }
+    nodeMove = v.sub(coord, this);
+    this.x = coord.x;
+    this.y = coord.y;
+    if (this.controlLeft) {
+      this.controlLeft.moveTo(v.add(this.controlLeft, nodeMove));
+    }
+    if (this.controlRight) {
+      this.controlRight.moveTo(v.add(this.controlRight, nodeMove));
+    }
+    if ((this.style === 'smooth' || this.style === 'symmetric') && this.controlLeft && this.controlRight) {
+      if (constrained) this.smooth();
+      if (this.controlLeft.y <= this.curve.topOffset || this.controlLeft.y >= this.curve.topOffset + this.curve.height) {
+        return this.smooth();
+      } else if (this.controlRight.y <= this.curve.topOffset || this.controlRight.y >= this.curve.topOffset + this.curve.height) {
+        return this.smooth();
+      }
+    }
+  };
+
+  return CurveNode;
+
+})();
+
+DisectionNode = (function() {
+
+  function DisectionNode() {
+    this.radius = 2;
+    this.clickRadius = 8;
+    this.coord = null;
+    this.bezierParameter;
+  }
+
+  DisectionNode.prototype.draw = function() {
+    var coord, offset;
+    if (this.coord) {
+      coord = this.coord;
+      offset = this.radius;
+      ctx.fillStyle = "rgba(255,255,255, 0.5)";
+      ctx.strokeStyle = "rgb(0,0,0)";
+      ctx.beginPath();
+      ctx.arc(coord.x, coord.y, this.radius, 0, TAU);
+      return ctx.fill();
+    }
+  };
+
+  DisectionNode.prototype.move = function(x, firstNode) {
+    var currNode, _results;
+    currNode = firstNode;
+    this.coord = null;
+    _results = [];
+    while (currNode !== null && currNode.next !== null) {
+      if (x > currNode.x && x < currNode.next.x) {
+        this.bezierParameter = cubicBezierAtX(x, currNode, currNode.controlRight, currNode.next.controlLeft, currNode.next);
+        this.coord = cubicBezier(this.bezierParameter, currNode, currNode.controlRight, currNode.next.controlLeft, currNode.next);
+        break;
+      }
+      _results.push(currNode = currNode.next);
+    }
+    return _results;
+  };
+
+  DisectionNode.prototype.isUnderMouse = function(pan) {
+    var mouse;
+    mouse = v.sub(core.canvasMouse(), pan);
+    if (!this.coord) return false;
+    return (v.sub(mouse, this.coord)).len() < this.clickRadius;
+  };
+
+  return DisectionNode;
+
+})();
+
+canvas = core.canvas;
+
+ctx = core.ctx;
+
+flattenBy = 4;
+
+nodeColors = {
+  smooth: "rgb(0,255,0)",
+  sharp: "rgb(255,0,0)",
+  flat: "rgb(255,255,0)",
+  symmetric: "rgb(255,0,255)"
+};
+
+run = function() {
+  var app, compiler;
+  compiler = new Compiler;
+  core.input.bind(core.key.LEFT_ARROW, 'pan-left');
+  core.input.bind(core.key.RIGHT_ARROW, 'pan-right');
+  core.input.bind(core.key.UP_ARROW, 'pan-up');
+  core.input.bind(core.key.DOWN_ARROW, 'pan-down');
+  core.input.bind(core.button.RIGHT, 'right-mouse');
+  core.input.bind(core.button.LEFT, 'left-mouse');
+  core.input.bind(core.key.D, 'debug');
+  app = new App();
+  app.run();
+  $('#item-smooth-node').click(function() {
+    var data;
+    data = $('.context-menu').data();
+    if (data.node) {
+      data.node.style = 'smooth';
+      data.node.smooth();
+    }
+    $('.context-menu').fadeOut('fast');
+    return app.invalidate();
+  });
+  $('#item-sharp-node').click(function() {
+    var data;
+    data = $('.context-menu').data();
+    if (data.node) {
+      if (data.node.style === 'flat') data.node.reset();
+      data.node.style = 'sharp';
+    }
+    $('.context-menu').fadeOut('fast');
+    return app.invalidate();
+  });
+  $('#item-flat-node').click(function() {
+    var data;
+    data = $('.context-menu').data();
+    if (data.node) {
+      data.node.style = 'flat';
+      data.node.flatten();
+    }
+    $('.context-menu').fadeOut('fast');
+    return app.invalidate();
+  });
+  $('#item-symmetric-node').click(function() {
+    var data;
+    data = $('.context-menu').data();
+    if (data.node) {
+      data.node.style = 'symmetric';
+      data.node.smooth();
+    }
+    $('.context-menu').fadeOut('fast');
+    return app.invalidate();
+  });
+  $('#item-remove-node').click(function() {
+    var data;
+    data = $('.context-menu').data();
+    if (data.node) data.node.remove();
+    $('.context-menu').fadeOut('fast');
+    return app.invalidate();
+  });
+  $('#item-reset-node').click(function() {
+    var data;
+    data = $('.context-menu').data();
+    if (data.node) data.node.reset();
+    $('.context-menu').fadeOut('fast');
+    return app.invalidate();
+  });
+  return $('#compile-button').click(function() {
+    return $('#compile-output').val(compiler.compile(app.curves));
+  });
+};
