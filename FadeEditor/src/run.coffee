@@ -43,7 +43,20 @@ run = ->
 
 	app = new App( )
 	app.run( )
-
+	
+	window.onblur = -> app.stop( )
+	window.onfocus = -> app.run( )
+	
+	size = ->
+		app.width = $('.canvasContainer').width( ) - $('.curveTitles').width( )
+		canvas.width = app.width
+		app.invalidate( )
+	
+	$(window).resize size
+	size( )
+	
+	
+	
 	# clicking on the context menu items
 	$('#item-smooth-node').click ->
 		data = $('.context-menu').data( )

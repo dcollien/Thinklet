@@ -16,8 +16,8 @@ App = (function(_super) {
     numCurves = 6;
     this.width = 800;
     this.height = this.curveSpacing + numCurves * (this.curveSpacing + this.curveHeight);
-    canvas.width = this.width;
     canvas.height = this.height;
+    canvas.width = this.width;
     this.pan = v(0, 0);
     this.panSpeed = 3.0;
     this.zoom = 1.0;
@@ -986,7 +986,7 @@ nodeColors = {
 };
 
 run = function() {
-  var app, compiler;
+  var app, compiler, size;
   compiler = new Compiler;
   core.input.bind(core.key.LEFT_ARROW, 'pan-left');
   core.input.bind(core.key.RIGHT_ARROW, 'pan-right');
@@ -999,6 +999,19 @@ run = function() {
   core.input.bind(core.key.CTRL, 'precision');
   app = new App();
   app.run();
+  window.onblur = function() {
+    return app.stop();
+  };
+  window.onfocus = function() {
+    return app.run();
+  };
+  size = function() {
+    app.width = $('.canvasContainer').width() - $('.curveTitles').width();
+    canvas.width = app.width;
+    return app.invalidate();
+  };
+  $(window).resize(size);
+  size();
   $('#item-smooth-node').click(function() {
     var data;
     data = $('.context-menu').data();

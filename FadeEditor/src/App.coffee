@@ -15,9 +15,10 @@ class App extends core.App
 		@width = 800
 		@height = @curveSpacing + numCurves*(@curveSpacing + @curveHeight)
 		
-		canvas.width = @width
 		canvas.height = @height
 		
+		canvas.width = @width
+			
 		@pan = v 0, 0
 		@panSpeed = 3.0
 		@zoom = 1.0

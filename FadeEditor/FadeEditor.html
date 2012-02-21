@@ -21,46 +21,43 @@
 .centerbox {
 	width: 100%;
 	height: 100%;
-	margin: 0; padding: 0;
+	margin: 0;
+	padding: 0;
 	
 	overflow-y: auto;
-}
-
-.canvasContainer {
-	width: 800px;
-	height: 100%;
 	
-	padding: 0px;
-	margin: 0px;
-	overflow-x: auto;
+	background-color: #000;
 }
-
 .curveTitles {
 	float: left;
 	padding-top: 16px;
 	padding-bottom: 16px;
 	
-	background-color: #ddd;
 	width: 64px;
 	height: 100%;
 	
-	border: 1px solid #aaa;
+	margin: 0px;
+	
+	font-size: 8pt;
+	font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+	color: #CCC;
+	
 }
 
 .curveTitle {
 	height: 288px;
-	font-weight: bold;
+	padding-left: 4px;
 }
 
 
 
-body, html { width: 100%; height: 100%; padding: 0; margin: 0; }
+body, html { width: 100%; height: 100%; padding: 0; margin: 0; overflow: hidden }
 canvas {
-	border-radius: 6px;
-	box-shadow: 0 0 6px #777;
+	border-left: 1px solid #444;
+	margin-left: -1px;
 }
 body {
-	background-color: #eee;
+	background-color: #000;
 }
 
 .context-menu {
@@ -91,39 +88,65 @@ body {
 	position: absolute;
 	top: 10px;
 	left: 10px;
+	padding: 5px;
 }
+
+.canvasContainer {
+	height:100%;
+	width:100%;
+}
+
 </style>
-<div class="centerbox flexbox">
-	<div>
+<div class="navbar navbar-fixed-top">
+  <div class="navbar-inner">
+    <div class="container">
+      <a class="btn btn-navbar" data-toggle="collapse" data-target=".nav-collapse">
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+        <span class="icon-bar"></span>
+      </a>
+      <a class="brand" href="#">Thinklet Fade Editor</a>
+      <div class="nav-collapse">
+        <ul class="nav">
+          <li><a data-toggle="modal" href="#debug-info">Debug Stuff</a></li>
+        </ul>
+      </div><!--/.nav-collapse -->
+    </div>
+  </div>
+</div>
+
+<div style="height:40px;background-color:red"></div>
+
+<div class="centerbox flexbox container">
+	<div style="height:100%;width:100%;">
 		<div class="curveTitles">
 			<div class="curveTitle flexbox" id="curve0">
-				Curve 0
+				Channel 0
 			</div>
 			
-			<div class="curveTitle flexbox" id="curve0">
-				Curve 1
+			<div class="curveTitle flexbox" id="curve1">
+				Channel 1
 			</div>
 			
-			<div class="curveTitle flexbox" id="curve0">
-				Curve 2
+			<div class="curveTitle flexbox" id="curve2">
+				Channel 2
 			</div>
 			
-			<div class="curveTitle flexbox" id="curve0">
-				Curve 3
+			<div class="curveTitle flexbox" id="curve3">
+				Channel 3
 			</div>
 			
-			<div class="curveTitle flexbox" id="curve0">
-				Curve 4
+			<div class="curveTitle flexbox" id="curve4">
+				Channel 4
 			</div>
 			
-			<div class="curveTitle flexbox" id="curve0">
-				Curve 5
+			<div class="curveTitle flexbox" id="curve5">
+				Channel 5
 			</div>
 		</div>
 		<div class="canvasContainer">
 			<canvas></canvas>
 		</div>
-		
 	</div>
 </div>
 <div class="context-menu hide">
@@ -136,17 +159,26 @@ body {
 		<li class="menu-item" id="item-reset-node" style="list-style:circle;color:#000"><span style="color:black">Reset</span></li>
 	</ul>
 </div>
-<div class="menu-box">
-	<br/><br/>
-	Drag Curve: <dd>Create Node Detail</dd>
-	Shift: <dd>Stretch/Compress Curve</dd>
-	Ctrl+Shift: <dd>Stretch/Compress All</dd>
-	Ctrl: <dd>Click Create</dd>
-	D: <dd>Debug (View Keyframes)</dd>
-	<br/>
-	<div class="btn btn-primary" id="compile-button">Do Stuff</div><br/>
-	<textarea id="compile-output" rows="20">
-	</textarea>
+<div class="modal hide" id="debug-info">
+	<div class="modal-header">
+	<a class="close" data-dismiss="modal">&times;</a>
+	<h3>Things and Stuff</h3>
+	</div>
+	<div class="modal-body">
+		<div style="float:left;width:50%">
+			Drag Curve: <dd>Create Node Detail</dd>
+			Shift: <dd>Stretch/Compress Curve</dd>
+			Ctrl+Shift: <dd>Stretch/Compress All</dd>
+			Ctrl: <dd>Click Create</dd>
+			D: <dd>Debug (View Keyframes)</dd>
+		</div>
+		<div class="padding:10px">
+			<div class="btn btn-primary" id="compile-button">Do Stuff</div>
+			<br/>
+			<textarea id="compile-output" rows="10">
+			</textarea>
+		</div>
+	</div>
 </div>
 <script src="lib/jquery.js"></script>
 <script src="lib/bootstrap/js/bootstrap.min.js"></script>

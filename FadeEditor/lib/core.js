@@ -133,7 +133,6 @@ core.scrollPos = function() {
 core.toCanvas = function(coord) {
   var scroll;
   scroll = core.scrollPos();
-  console.log(scroll.x, scroll.y);
   return {
     x: coord.x - core.canvas.offsetLeft + scroll.x,
     y: coord.y - core.canvas.offsetTop + scroll.y
