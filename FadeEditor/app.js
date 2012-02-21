@@ -24,7 +24,7 @@ App = (function(_super) {
     this.zoom = 1.0;
     this.curves = [];
     this.maxPanX = 64;
-    for (i = 0; 0 <= numCurves ? i <= numCurves : i >= numCurves; 0 <= numCurves ? i++ : i--) {
+    for (i = 0; 0 <= numCurves ? i < numCurves : i > numCurves; 0 <= numCurves ? i++ : i--) {
       this.curves.push(new Curve(this.curveSpacing + i * (this.curveSpacing + this.curveHeight)));
     }
     this.dragNode = null;
@@ -34,6 +34,15 @@ App = (function(_super) {
     this.pushMode = false;
     this.disectionNode = new DisectionNode();
   }
+
+  App.prototype.updateColors = function() {
+    var curve, i, _ref;
+    for (i = 0, _ref = this.curves.length; 0 <= _ref ? i < _ref : i > _ref; 0 <= _ref ? i++ : i--) {
+      curve = this.curves[i];
+      curve.color = $('#colorbox' + i).css('background-color');
+    }
+    return this.invalidate();
+  };
 
   App.prototype.updateDragging = function(dt) {
     var curve, diff, globalY, mouse, _i, _len, _ref;
@@ -136,26 +145,26 @@ App = (function(_super) {
         }
       }
     }
-    if (core.input.down('debug')) {
-      this.debug = true;
+    if (core.input.down('keyframe')) {
+      this.showKeyframes = true;
       this.invalidate();
     }
-    if (core.input.released('debug')) {
-      this.debug = false;
+    if (core.input.released('keyframe')) {
+      this.showKeyframes = false;
       this.invalidate();
     }
-    if (core.input.down('pan-left')) {
+    if (core.input.down('pan-right')) {
       this.pan.x -= this.panSpeed;
       this.invalidate();
-    } else if (core.input.down('pan-right')) {
+    } else if (core.input.down('pan-left')) {
       this.pan.x += this.panSpeed;
       if (this.pan.x > this.maxPanX) this.pan.x = this.maxPanX;
       this.invalidate();
     }
-    if (core.input.down('pan-up')) {
-      this.scrollBox.scrollTop(this.scrollBox.scrollTop() - this.panSpeed);
-    } else if (core.input.down('pan-down')) {
+    if (core.input.down('pan-down')) {
       this.scrollBox.scrollTop(this.scrollBox.scrollTop() + this.panSpeed);
+    } else if (core.input.down('pan-up')) {
+      this.scrollBox.scrollTop(this.scrollBox.scrollTop() - this.panSpeed);
     }
     if (core.input.pressed('left-mouse')) {
       $('.context-menu').fadeOut('fast');
@@ -312,35 +321,37 @@ App = (function(_super) {
       curve.drawSegments();
     }
     this.disectionNode.draw();
-    if (!this.debug) {
+    if (this.showKeyframes) {
       _ref4 = this.curves;
       for (_k = 0, _len3 = _ref4.length; _k < _len3; _k++) {
         curve = _ref4[_k];
-        curve.drawNodes();
-      }
-    }
-    if (this.debug) {
-      _ref5 = this.curves;
-      for (_l = 0, _len4 = _ref5.length; _l < _len4; _l++) {
-        curve = _ref5[_l];
-        ctx.lineWidth = 1;
-        ctx.strokeStyle = "rgb(255,255,255)";
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = "rgb(196,196,196)";
         ctx.beginPath();
         ctx.moveTo(curve.firstNode.x, curve.firstNode.y);
         flattenedNodes = curve.outputNodes(flattenBy, 255);
-        for (_m = 0, _len5 = flattenedNodes.length; _m < _len5; _m++) {
-          node = flattenedNodes[_m];
+        for (_l = 0, _len4 = flattenedNodes.length; _l < _len4; _l++) {
+          node = flattenedNodes[_l];
           ctx.lineTo(node.x, node.y + curve.topOffset);
         }
         ctx.stroke();
-        for (_n = 0, _len6 = flattenedNodes.length; _n < _len6; _n++) {
-          node = flattenedNodes[_n];
+        for (_m = 0, _len5 = flattenedNodes.length; _m < _len5; _m++) {
+          node = flattenedNodes[_m];
           ctx.fillStyle = "rgb(255,255,255)";
+          ctx.strokeStyle = "rgb(0,0,0)";
+          ctx.lineWidth = 1;
           ctx.beginPath();
           ctx.arc(node.x, node.y + curve.topOffset, 3, 0, TAU);
           ctx.fill();
+          ctx.stroke();
         }
       }
+    }
+    _ref5 = this.curves;
+    for (_n = 0, _len6 = _ref5.length; _n < _len6; _n++) {
+      curve = _ref5[_n];
+      if (!this.showKeyframes) curve.drawControlLines();
+      curve.drawNodes();
     }
     return ctx.restore();
   };
@@ -358,6 +369,13 @@ Compiler = (function() {
     this.gammaTableSize = 64;
   }
 
+  Compiler.prototype.toHexByte = function(num) {
+    var hex;
+    hex = num.toString(16);
+    if (hex.length === 1) hex = '0' + hex;
+    return hex;
+  };
+
   Compiler.prototype.makeGammaTable = function() {
     var i, _ref, _results;
     this.gammaTable = [];
@@ -369,39 +387,38 @@ Compiler = (function() {
   };
 
   Compiler.prototype.generatePrelude = function() {
-    return '// Start\n';
+    return '// Placeholder for stuff at the start\n';
   };
 
   Compiler.prototype.generatePostlude = function() {
-    return '// Do stuff\n';
+    return '\n// Placeholder for other stuff to do\n';
   };
 
   Compiler.prototype.generateGammaTableCode = function() {
     var outputCode;
-    outputCode = 'gamma = {\n';
-    outputCode += this.gammaTable.join(',');
-    outputCode += '\n}\n';
+    outputCode = '// Gamma Table\n';
+    outputCode += (this.gammaTable.map(this.toHexByte)).join(' ');
+    outputCode += '\n';
     return outputCode;
   };
 
   Compiler.prototype.generatePathCode = function() {
     var coord, offsetPath, outputCode, path, pathCode, pathID, prevX, _i, _j, _len, _len2, _ref;
-    outputCode = '// Byte 1: Time Offset (since last)\n// Byte 2: Intensity value (raw)\n';
+    outputCode = '\n\n// Channels\n// Byte 1: Time Offset (since last)\n// Byte 2: Intensity value (raw)\n';
     pathID = 0;
     _ref = this.paths;
     for (_i = 0, _len = _ref.length; _i < _len; _i++) {
       path = _ref[_i];
-      console.log(path, path.length);
       pathCode = '';
       outputCode += '// Channel ' + pathID + '\n';
       offsetPath = [];
       prevX = 0;
       for (_j = 0, _len2 = path.length; _j < _len2; _j++) {
         coord = path[_j];
-        offsetPath.push((coord.x - prevX) + ',' + coord.y);
+        offsetPath.push(this.toHexByte(coord.x - prevX) + ' ' + this.toHexByte(coord.y));
         prevX = coord.x;
       }
-      pathCode += offsetPath.join(',\n');
+      pathCode += offsetPath.join('\n');
       pathID += 1;
       outputCode += pathCode + '\n';
     }
@@ -751,16 +768,23 @@ Curve = (function() {
     return _results;
   };
 
-  Curve.prototype.drawNodes = function() {
-    var node, nodes, _i, _j, _len, _len2, _results;
-    nodes = this.getNodes();
-    for (_i = 0, _len = nodes.length; _i < _len; _i++) {
-      node = nodes[_i];
-      this.drawControlPoints(node);
-    }
+  Curve.prototype.drawControlLines = function() {
+    var node, _i, _len, _ref, _results;
+    _ref = this.getNodes();
     _results = [];
-    for (_j = 0, _len2 = nodes.length; _j < _len2; _j++) {
-      node = nodes[_j];
+    for (_i = 0, _len = _ref.length; _i < _len; _i++) {
+      node = _ref[_i];
+      _results.push(this.drawControlPoints(node));
+    }
+    return _results;
+  };
+
+  Curve.prototype.drawNodes = function() {
+    var node, _i, _len, _ref, _results;
+    _ref = this.getNodes();
+    _results = [];
+    for (_i = 0, _len = _ref.length; _i < _len; _i++) {
+      node = _ref[_i];
       _results.push(this.drawNode(node));
     }
     return _results;
@@ -1018,7 +1042,7 @@ nodeColors = {
 };
 
 run = function() {
-  var app, compiler, size;
+  var activeColorBox, app, colorbox, compiler, i, makeTitles, size;
   compiler = new Compiler;
   core.input.bind(core.key.LEFT_ARROW, 'pan-left');
   core.input.bind(core.key.RIGHT_ARROW, 'pan-right');
@@ -1026,7 +1050,7 @@ run = function() {
   core.input.bind(core.key.DOWN_ARROW, 'pan-down');
   core.input.bind(core.button.RIGHT, 'right-mouse');
   core.input.bind(core.button.LEFT, 'left-mouse');
-  core.input.bind(core.key.D, 'debug');
+  core.input.bind(core.key.K, 'keyframe');
   core.input.bind(core.key.SHIFT, 'push');
   core.input.bind(core.key.CTRL, 'precision');
   app = new App();
@@ -1044,6 +1068,37 @@ run = function() {
   };
   $(window).resize(size);
   size();
+  makeTitles = function() {
+    var colors, i, titles;
+    titles = '';
+    colors = ['#0000ff', '#00ff00', '#ff0000', '#00ffff', '#ff00ff', '#ffff00'];
+    for (i = 0; i < 6; i++) {
+      titles += "				<div class=\"curveTitle flexbox\" id=\"curve" + i + "\">					<div style=\"text-align:center\">						" + i + "						<div class=\"color-select\">							<div class=\"colorbox\" id=\"colorbox" + i + "\" style=\"background-color:" + colors[i] + "\"></div>						</div>					</div>				</div>";
+    }
+    return titles;
+  };
+  $('.curveTitles').html(makeTitles());
+  $('#colorchooser').modal({
+    backdrop: false,
+    show: false
+  });
+  $('#colorchooser').modal("hide");
+  activeColorBox = null;
+  $('#farbtastic').farbtastic(function(color) {
+    console.log($(this).data());
+    if (activeColorBox) activeColorBox.css('background-color', color);
+    return app.updateColors();
+  });
+  for (i = 0; i < 6; i++) {
+    colorbox = $('#colorbox' + i);
+    colorbox.click(function() {
+      console.log(colorbox);
+      activeColorBox = $(this);
+      $.farbtastic('#farbtastic').setColor(new RGBColor(activeColorBox.css('background-color')).toHex());
+      return $('#colorchooser').modal("show");
+    });
+  }
+  app.updateColors();
   $('#item-smooth-node').click(function() {
     var data;
     data = $('.context-menu').data();

@@ -37,7 +37,7 @@ run = ->
 	core.input.bind core.key.DOWN_ARROW, 'pan-down'
 	core.input.bind core.button.RIGHT, 'right-mouse'
 	core.input.bind core.button.LEFT, 'left-mouse'
-	core.input.bind core.key.D, 'debug'
+	core.input.bind core.key.K, 'keyframe'
 	core.input.bind core.key.SHIFT, 'push'
 	core.input.bind core.key.CTRL, 'precision'
 
@@ -56,6 +56,45 @@ run = ->
 	size( )
 	
 	
+	makeTitles = ->
+		titles = ''
+		
+		colors = ['#0000ff', '#00ff00', '#ff0000', '#00ffff', '#ff00ff', '#ffff00']
+		
+		for i in [0...6]
+			titles += "
+				<div class=\"curveTitle flexbox\" id=\"curve#{i}\">
+					<div style=\"text-align:center\">
+						#{i}
+						<div class=\"color-select\">
+							<div class=\"colorbox\" id=\"colorbox#{i}\" style=\"background-color:#{colors[i]}\"></div>
+						</div>
+					</div>
+				</div>"
+		return titles
+	
+	$('.curveTitles').html makeTitles( )
+	
+	$('#colorchooser').modal {backdrop: false, show:false}
+	$('#colorchooser').modal "hide"
+	
+	activeColorBox = null
+	
+	$('#farbtastic').farbtastic (color) ->
+		console.log $(this).data( )
+		if activeColorBox
+			activeColorBox.css 'background-color', color
+		app.updateColors( )
+	
+	for i in [0...6]
+		colorbox = $('#colorbox' + i)
+		colorbox.click ->
+			console.log colorbox
+			activeColorBox = $(this)
+			$.farbtastic('#farbtastic').setColor (new RGBColor(activeColorBox.css 'background-color').toHex( ))
+			$('#colorchooser').modal "show"
+		
+	app.updateColors( )
 	
 	# clicking on the context menu items
 	$('#item-smooth-node').click ->

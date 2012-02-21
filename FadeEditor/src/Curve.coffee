@@ -21,6 +21,7 @@ class Curve
 			line = segment.line
 			[t, p0, p1, p2, p3] = segment.curve
 			
+			# add the first coord in each line
 			output.push (v (Math.floor line[0].x), (Math.floor (line[0].y - @topOffset)))
 			
 			if maxXOffset > 0
@@ -28,6 +29,8 @@ class Curve
 				if xOffset > maxXOffset
 					numExtraNodes = Math.floor (xOffset/maxXOffset)
 					for i in [1..numExtraNodes]
+						# put in extra nodes so that a max X distance is never exceeded
+						# get the Y value by finding where on the bezier the x value sits
 						x = line[0].x + (i*maxXOffset)
 						t = cubicBezierAtX x, p0, p1, p2, p3
 						y = (cubicBezier t, p0, p1, p2, p3).y
@@ -35,7 +38,7 @@ class Curve
 						outY = (Math.floor (y - @topOffset))
 						output.push (v outX, outY)
 			
-		
+		# add the last coord in the last line
 		segment = segments[segments.length-1]
 		line = segment.line
 		output.push (v (Math.floor line[1].x), (Math.floor (line[1].y - @topOffset)))
@@ -263,12 +266,11 @@ class Curve
 		for i in [0...nodes.length-1]
 			@drawCurveSegment nodes[i], nodes[i+1]
 	
+	drawControlLines: ->
+		@drawControlPoints node for node in @getNodes( )
+	
 	drawNodes: ->
-		nodes = @getNodes( )
-		@drawControlPoints node for node in nodes
-		
-		@drawNode node for node in nodes
-		
+		@drawNode node for node in @getNodes( )
 		
 	controlAtMouse: (pan) ->
 		radius = 6

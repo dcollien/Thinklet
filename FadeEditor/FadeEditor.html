@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <link rel="stylesheet" href="lib/bootstrap/css/bootstrap.min.css" type="text/css" media="screen" charset="utf-8">
+<link rel="stylesheet" href="lib/farbtastic/farbtastic.css" type="text/css" />
 <style>
 .flexbox {
 	display: -webkit-box;
@@ -38,10 +39,9 @@
 	
 	margin: 0px;
 	
-	font-size: 8pt;
 	font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
-	color: #CCC;
-	
+	color: #aaa;
+	font-weight: bold;
 }
 
 .curveTitle {
@@ -53,7 +53,7 @@
 
 body, html { width: 100%; height: 100%; padding: 0; margin: 0; overflow: hidden }
 canvas {
-	border-left: 1px solid #444;
+	border-left: 1px solid #666;
 	margin-left: -1px;
 }
 body {
@@ -62,8 +62,9 @@ body {
 
 .context-menu {
 	position: absolute;
-	background-color: #EEE;
-	border: 1px solid black;
+	background-color: #333;
+	color: #eee;
+	border: 1px solid #666;
 	border-radius: 0px 10px 10px 10px;
 	padding: 4px;
 	
@@ -84,6 +85,14 @@ body {
 	background-color: #ccc;
 }
 
+.menu-text {
+	color: #eee;
+}
+
+.menu-item:hover .menu-text {
+	color: #444;
+}
+
 .menu-box {
 	position: absolute;
 	top: 10px;
@@ -96,19 +105,40 @@ body {
 	width:100%;
 }
 
+.colorbox {
+	display: block;
+	width: 15px;
+	height: 15px;
+	border-radius: 2px;
+}
+
+.colorbox:hover {
+	opacity:0.8;
+}
+
+.dialogHeader {
+	font-weight: 300;
+	color: #eee;
+	border-color: #555;
+	background-color: #444;
+}
+
+#colorchooser {
+	width: 320px;
+	background-color: #333;
+	color: #ccc;
+	border-color: #555;
+}
+
 </style>
 <div class="navbar navbar-fixed-top">
   <div class="navbar-inner">
     <div class="container">
-      <a class="btn btn-navbar" data-toggle="collapse" data-target=".nav-collapse">
-        <span class="icon-bar"></span>
-        <span class="icon-bar"></span>
-        <span class="icon-bar"></span>
-      </a>
       <a class="brand" href="#">Thinklet Fade Editor</a>
       <div class="nav-collapse">
         <ul class="nav">
-          <li><a data-toggle="modal" href="#debug-info">Debug Stuff</a></li>
+          <li><a data-toggle="modal" href="#how-to">How do I use this?</a></li>
+          <li><a data-toggle="modal" href="#debug-info">Compile Debug Stuff</a></li>
         </ul>
       </div><!--/.nav-collapse -->
     </div>
@@ -120,29 +150,6 @@ body {
 <div class="centerbox flexbox container">
 	<div style="height:100%;width:100%;">
 		<div class="curveTitles">
-			<div class="curveTitle flexbox" id="curve0">
-				Channel 0
-			</div>
-			
-			<div class="curveTitle flexbox" id="curve1">
-				Channel 1
-			</div>
-			
-			<div class="curveTitle flexbox" id="curve2">
-				Channel 2
-			</div>
-			
-			<div class="curveTitle flexbox" id="curve3">
-				Channel 3
-			</div>
-			
-			<div class="curveTitle flexbox" id="curve4">
-				Channel 4
-			</div>
-			
-			<div class="curveTitle flexbox" id="curve5">
-				Channel 5
-			</div>
 		</div>
 		<div class="canvasContainer">
 			<canvas></canvas>
@@ -151,37 +158,64 @@ body {
 </div>
 <div class="context-menu hide">
 	<ul>
-		<li class="menu-item" id="item-smooth-node" style="list-style:disc;color:#0f0"><span style="color:black">Smooth</span></li>
-		<li class="menu-item" id="item-symmetric-node" style="list-style:disc;color:#f0f"><span style="color:black">Symmetric</span></li>
-		<li class="menu-item" id="item-sharp-node" style="list-style:square;color:#f00"><span style="color:black">Sharp</span></li>
-		<li class="menu-item" id="item-flat-node" style="list-style:square;color:#ff0"><span style="color:black">Flat</span></li>
-		<li class="menu-item" id="item-remove-node" style="list-style-image: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAcAAAAHCAYAAADEUlfTAAAACXBIWXMAAAsTAAALEwEAmpwYAAAAIGNIUk0AAHolAACAgwAA+f8AAIDpAAB1MAAA6mAAADqYAAAXb5JfxUYAAABNSURBVHjaXI7BDcAwCAMvyQjMyQ6dAbZiKfqoUK34g2zJh1dENIC7M8pMAPYdzAVY3d0ajNz9aypS/b5R6o+ZPdqoKgCq6h80KH3xDgBqNR97p8oAGQAAAABJRU5ErkJggg==);"><span style="color:black">Remove</span></li>
-		<li class="menu-item" id="item-reset-node" style="list-style:circle;color:#000"><span style="color:black">Reset</span></li>
+		<li class="menu-item" id="item-smooth-node" style="list-style:disc;color:#0f0"><span class="menu-text">Smooth</span></li>
+		<li class="menu-item" id="item-symmetric-node" style="list-style:disc;color:#f0f"><span class="menu-text">Symmetric</span></li>
+		<li class="menu-item" id="item-sharp-node" style="list-style:square;color:#f00"><span class="menu-text">Sharp</span></li>
+		<li class="menu-item" id="item-flat-node" style="list-style:square;color:#ff0"><span class="menu-text">Flat</span></li>
+		<li class="menu-item" id="item-remove-node" style="list-style-image: url('media/remove.png');"><span class="menu-text">Remove</span></li>
+		<li class="menu-item" id="item-reset-node" style="list-style:circle;color:#ccc"><span class="menu-text">Reset</span></li>
 	</ul>
 </div>
+
+<div class="modal hide" id="how-to">
+	<div class="modal-header">
+	<a class="close" data-dismiss="modal">&times;</a>
+	<h3>What Does What</h3>
+	</div>
+	<div class="modal-body">
+		<em>Dragging the Curve:</em> <dd>Create more detail with a new node</dd><br/>
+		<em>Dragging the Backdrop:</em> <dd>Pan/scroll the view</dd><br/>
+		<em>Right-clicking a Node:</em> <dd>Change the type, reset or remove the node</dd><br/>
+		
+		<em>Holding <b>Ctrl</b> and Clicking:</em> <dd>Create new nodes</dd><br/>
+		<em>Holding <b>Shift</b> and Dragging:</em> <dd>Stretch/compress the curve</dd><br/>
+		<em>Holding <b>Ctrl+Shift</b> Dragging:</em> <dd>Stretch/compress all curves</dd><br/>
+		
+		<em>Holding <b>K</b>:</em> <dd>View optimised keyframes</dd><br/>
+	</div>
+</div>
+
 <div class="modal hide" id="debug-info">
 	<div class="modal-header">
 	<a class="close" data-dismiss="modal">&times;</a>
-	<h3>Things and Stuff</h3>
+	<h3>Compile Debug</h3>
 	</div>
 	<div class="modal-body">
-		<div style="float:left;width:50%">
-			Drag Curve: <dd>Create Node Detail</dd>
-			Shift: <dd>Stretch/Compress Curve</dd>
-			Ctrl+Shift: <dd>Stretch/Compress All</dd>
-			Ctrl: <dd>Click Create</dd>
-			D: <dd>Debug (View Keyframes)</dd>
-		</div>
 		<div class="padding:10px">
-			<div class="btn btn-primary" id="compile-button">Do Stuff</div>
-			<br/>
-			<textarea id="compile-output" rows="10">
+			<div class="btn btn-primary" id="compile-button">Do Clever Things</div>
+			<br/><br/>
+			<textarea id="compile-output" style="width:100%;height:300px">
 			</textarea>
 		</div>
 	</div>
 </div>
+
+<div class="modal hide" id="colorchooser">
+  <center>
+  <div class="modal-header dialogHeader">
+    <a class="close" data-dismiss="modal" data-target="#colorchooser">&times;</a>
+    <h3 class="dialogHeader">Channel Display Color</h3>
+  </div>
+  <div class="modal-body">
+    <div id="farbtastic"></div>
+  </div>
+  </center>
+</div>
+
 <script src="lib/jquery.js"></script>
 <script src="lib/bootstrap/js/bootstrap.min.js"></script>
+<script src="lib/farbtastic/farbtastic.js"></script>
+<script src="lib/rgbcolor.js"></script>
 <script src="lib/core.js"></script>
 <script src="lib/math.js"></script>
 <script src="app.js"></script>

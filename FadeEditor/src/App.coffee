@@ -29,7 +29,7 @@ class App extends core.App
 		@maxPanX = 64
 		
 		
-		for i in [0..numCurves]
+		for i in [0...numCurves]
 			@curves.push new Curve( @curveSpacing + i*(@curveSpacing + @curveHeight) )
 			
 		@dragNode = null
@@ -40,7 +40,12 @@ class App extends core.App
 		@pushMode = false
 		
 		@disectionNode = new DisectionNode( )
-		
+	
+	updateColors: ->
+		for i in [0...(@curves.length)]
+			curve = @curves[i]
+			curve.color = $('#colorbox' + i).css 'background-color'
+		@invalidate( )
 		
 	updateDragging: (dt) ->
 		# handle the dragging parts of the update
@@ -146,20 +151,20 @@ class App extends core.App
 				@disectionNode.move mouse.x, curve.firstNode
 				@invalidate( ) if @lastMouse and @disectionNode.coord and not v.eq mouse, @lastMouse
 		
-		if core.input.down 'debug'
-			@debug = true
+		if core.input.down 'keyframe'
+			@showKeyframes = true
 			@invalidate( )
 		
-		if core.input.released 'debug'
-			@debug = false
+		if core.input.released 'keyframe'
+			@showKeyframes = false
 			@invalidate( )
 		
 		# keys do panning	at the moment
-		if core.input.down 'pan-left'
+		if core.input.down 'pan-right'
 			@pan.x -= @panSpeed
 				
 			@invalidate( )	
-		else if core.input.down 'pan-right'
+		else if core.input.down 'pan-left'
 			@pan.x += @panSpeed
 			
 			if @pan.x > @maxPanX
@@ -168,12 +173,12 @@ class App extends core.App
 			@invalidate( )
 		
 		
-		if core.input.down 'pan-up'
-			@scrollBox.scrollTop (@scrollBox.scrollTop( ) - @panSpeed)
+		if core.input.down 'pan-down'
+			@scrollBox.scrollTop (@scrollBox.scrollTop( ) + @panSpeed)
 			#@pan.y -= @panSpeed
 			#@invalidate( )	
-		else if core.input.down 'pan-down'
-			@scrollBox.scrollTop (@scrollBox.scrollTop( ) + @panSpeed)
+		else if core.input.down 'pan-up'
+			@scrollBox.scrollTop (@scrollBox.scrollTop( ) - @panSpeed)
 			#@pan.y += @panSpeed
 			#@invalidate( )
 		
@@ -348,17 +353,12 @@ class App extends core.App
 		
 		# draw disection node
 		@disectionNode.draw( )
-			
-		# draw curve nodes
-		if not @debug
-			for curve in @curves
-				curve.drawNodes( )
-			
+		
 		# draw flattened lines
-		if @debug
+		if @showKeyframes
 			for curve in @curves
-				ctx.lineWidth = 1
-				ctx.strokeStyle = "rgb(255,255,255)"
+				ctx.lineWidth = 2
+				ctx.strokeStyle = "rgb(196,196,196)"
 				ctx.beginPath( )
 				ctx.moveTo curve.firstNode.x, curve.firstNode.y
 				
@@ -371,8 +371,18 @@ class App extends core.App
 				
 				for node in flattenedNodes
 					ctx.fillStyle = "rgb(255,255,255)"
+					ctx.strokeStyle = "rgb(0,0,0)"
+					ctx.lineWidth = 1
 					ctx.beginPath( )
 					ctx.arc node.x, (node.y + curve.topOffset), 3, 0, TAU
 					ctx.fill( )
+					ctx.stroke( )
 					
+					
+		# draw curve nodes
+		for curve in @curves
+			if not @showKeyframes
+				curve.drawControlLines( )
+			curve.drawNodes( )
+				
 		ctx.restore( )

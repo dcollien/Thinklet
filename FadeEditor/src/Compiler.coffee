@@ -4,6 +4,12 @@ class Compiler
 		@threshold = 4
 		@gamma = 2.5
 		@gammaTableSize = 64
+	
+	toHexByte: (num) -> 
+		hex = num.toString(16)
+		if hex.length == 1
+			hex = '0' + hex
+		return hex
 		
 	makeGammaTable: ->
 		@gammaTable = []
@@ -14,26 +20,30 @@ class Compiler
 		# TODO: timing multiplier (256 = 1 microsecond, 256 = 1 second, or 256 = 1 minute, etc.)
 		
 		'''
-		// Start
+		// Placeholder for stuff at the start
 		
 		'''
 	
 	generatePostlude: ->
 		'''
-		// Do stuff
+		
+		// Placeholder for other stuff to do
 		
 		'''
 		
 	
 	generateGammaTableCode: ->
-		outputCode = 'gamma = {\n'
-		outputCode += @gammaTable.join ','
-		outputCode += '\n}\n'
+		outputCode = '// Gamma Table\n'
+		outputCode += (@gammaTable.map @toHexByte).join ' '
+		outputCode += '\n'
 		
 		return outputCode
 		
 	generatePathCode: ->
-		outputCode = '''
+		
+				
+		outputCode = '''\n
+		// Channels
 		// Byte 1: Time Offset (since last)
 		// Byte 2: Intensity value (raw)
 		
@@ -41,17 +51,17 @@ class Compiler
 		
 		pathID = 0
 		for path in @paths
-			console.log path, path.length
+			#console.log path, path.length
 			pathCode = ''
 			
 			outputCode += '// Channel ' + pathID + '\n'
 			offsetPath = []
 			prevX = 0
 			for coord in path
-				offsetPath.push (coord.x - prevX) + ',' + coord.y
+				offsetPath.push @toHexByte(coord.x - prevX) + ' ' + @toHexByte(coord.y)
 				prevX = coord.x
 			
-			pathCode += (offsetPath).join ',\n'
+			pathCode += (offsetPath).join '\n'
 			pathID += 1
 			
 			outputCode += pathCode + '\n'
