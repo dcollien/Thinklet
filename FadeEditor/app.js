@@ -252,7 +252,7 @@ App = (function(_super) {
   };
 
   App.prototype.draw = function() {
-    var bar, currY, curve, line, point, _i, _j, _k, _l, _len, _len2, _len3, _len4, _len5, _m, _ref, _ref2, _ref3, _ref4, _ref5, _ref6;
+    var bar, currY, curve, flattenedNodes, node, point, _i, _j, _k, _l, _len, _len2, _len3, _len4, _len5, _len6, _m, _n, _ref, _ref2, _ref3, _ref4, _ref5;
     App.__super__.draw.call(this);
     this.drawBackground();
     this.drawGrid();
@@ -323,21 +323,21 @@ App = (function(_super) {
       _ref5 = this.curves;
       for (_l = 0, _len4 = _ref5.length; _l < _len4; _l++) {
         curve = _ref5[_l];
-        _ref6 = curve.flatten(flattenBy);
-        for (_m = 0, _len5 = _ref6.length; _m < _len5; _m++) {
-          line = _ref6[_m];
-          ctx.lineWidth = 1;
-          ctx.strokeStyle = "rgb(255,255,255)";
-          ctx.beginPath();
-          ctx.moveTo(line[0].x, line[0].y);
-          ctx.lineTo(line[1].x, line[1].y);
-          ctx.stroke();
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = "rgb(255,255,255)";
+        ctx.beginPath();
+        ctx.moveTo(curve.firstNode.x, curve.firstNode.y);
+        flattenedNodes = curve.outputNodes(flattenBy, 255);
+        for (_m = 0, _len5 = flattenedNodes.length; _m < _len5; _m++) {
+          node = flattenedNodes[_m];
+          ctx.lineTo(node.x, node.y + curve.topOffset);
+        }
+        ctx.stroke();
+        for (_n = 0, _len6 = flattenedNodes.length; _n < _len6; _n++) {
+          node = flattenedNodes[_n];
           ctx.fillStyle = "rgb(255,255,255)";
           ctx.beginPath();
-          ctx.arc(line[0].x, line[0].y, 3, 0, TAU);
-          ctx.fill();
-          ctx.beginPath();
-          ctx.arc(line[1].x, line[1].y, 3, 0, TAU);
+          ctx.arc(node.x, node.y + curve.topOffset, 3, 0, TAU);
           ctx.fill();
         }
       }
@@ -369,36 +369,41 @@ Compiler = (function() {
   };
 
   Compiler.prototype.generatePrelude = function() {
-    return '#include <avr/io.h>\n#include <util/delay.h>';
+    return '// Start\n';
   };
 
   Compiler.prototype.generatePostlude = function() {
-    return 'int main( void ) {\n	DDRB = 1;\n	PORTB = 0;\n	\n	// TODO: set up interrupts\n	// and write code\n	\n	return 0;\n}';
+    return '// Do stuff\n';
   };
 
   Compiler.prototype.generateGammaTableCode = function() {
     var outputCode;
-    outputCode = 'uint8_t gamma[' + this.gammaTableSize + '] = {\n';
-    outputCode += this.gammaTable.join(',\n');
-    outputCode += '\n};\n';
+    outputCode = 'gamma = {\n';
+    outputCode += this.gammaTable.join(',');
+    outputCode += '\n}\n';
     return outputCode;
   };
 
   Compiler.prototype.generatePathCode = function() {
-    var coordCode, outputCode, path, pathCode, pathID, _i, _len, _ref;
-    outputCode = 'typedef struct {\n	// 256 = 1 second\n	uint16_t t;\n	\n	// 255 = 100%\n	uint8_t dutyCycle;\n} pwmKeyframe_t;';
-    coordCode = function(coord) {
-      return '{' + (Math.floor(coord.x)) + ',' + (Math.floor(coord.y)) + '}';
-    };
+    var coord, offsetPath, outputCode, path, pathCode, pathID, prevX, _i, _j, _len, _len2, _ref;
+    outputCode = '// Byte 1: Time Offset (since last)\n// Byte 2: Intensity value (raw)\n';
     pathID = 0;
     _ref = this.paths;
     for (_i = 0, _len = _ref.length; _i < _len; _i++) {
       path = _ref[_i];
-      pathCode = 'pwmKeyframe_t path' + pathID + '[' + path.length + '] = {\n';
-      pathCode += (path.map(coordCode)).join(',\n');
-      pathCode += '};\n';
+      console.log(path, path.length);
+      pathCode = '';
+      outputCode += '// Channel ' + pathID + '\n';
+      offsetPath = [];
+      prevX = 0;
+      for (_j = 0, _len2 = path.length; _j < _len2; _j++) {
+        coord = path[_j];
+        offsetPath.push((coord.x - prevX) + ',' + coord.y);
+        prevX = coord.x;
+      }
+      pathCode += offsetPath.join(',\n');
       pathID += 1;
-      outputCode += pathCode;
+      outputCode += pathCode + '\n';
     }
     return outputCode;
   };
@@ -414,7 +419,7 @@ Compiler = (function() {
     for (_i = 0, _len = curves.length; _i < _len; _i++) {
       curve = curves[_i];
       height = curve.height;
-      this.paths.push(curve.outputNodes());
+      this.paths.push(curve.outputNodes(flattenBy, this.maxValue));
     }
     outputCode += this.generatePathCode();
     outputCode += this.generatePostlude();
@@ -503,31 +508,49 @@ Curve = (function() {
     this.debug = false;
   }
 
-  Curve.prototype.outputNodes = function(threshold, steps) {
-    var line, lines, output, _i, _len;
-    lines = this.flatten(threshold, steps);
+  Curve.prototype.outputNodes = function(threshold, maxXOffset, steps) {
+    var i, line, numExtraNodes, outX, outY, output, p0, p1, p2, p3, segment, segments, t, x, xOffset, y, _i, _len, _ref;
+    if (maxXOffset == null) maxXOffset = 0;
+    segments = this.flatten(threshold, steps);
     output = [];
-    for (_i = 0, _len = lines.length; _i < _len; _i++) {
-      line = lines[_i];
-      output.push(v(line[0].x, line[0].y - this.topOffset));
+    for (_i = 0, _len = segments.length; _i < _len; _i++) {
+      segment = segments[_i];
+      line = segment.line;
+      _ref = segment.curve, t = _ref[0], p0 = _ref[1], p1 = _ref[2], p2 = _ref[3], p3 = _ref[4];
+      output.push(v(Math.floor(line[0].x), Math.floor(line[0].y - this.topOffset)));
+      if (maxXOffset > 0) {
+        xOffset = Math.abs(line[0].x - line[1].x);
+        if (xOffset > maxXOffset) {
+          numExtraNodes = Math.floor(xOffset / maxXOffset);
+          for (i = 1; 1 <= numExtraNodes ? i <= numExtraNodes : i >= numExtraNodes; 1 <= numExtraNodes ? i++ : i--) {
+            x = line[0].x + (i * maxXOffset);
+            t = cubicBezierAtX(x, p0, p1, p2, p3);
+            y = (cubicBezier(t, p0, p1, p2, p3)).y;
+            outX = Math.floor(x);
+            outY = Math.floor(y - this.topOffset);
+            output.push(v(outX, outY));
+          }
+        }
+      }
     }
-    line = lines[lines.length - 1];
-    output.push(v(line[1].x, line[1].y - this.topOffset));
+    segment = segments[segments.length - 1];
+    line = segment.line;
+    output.push(v(Math.floor(line[1].x), Math.floor(line[1].y - this.topOffset)));
     return output;
   };
 
   Curve.prototype.flatten = function(threshold, steps) {
-    var currNode, end, lines, newLines, start;
-    lines = [];
+    var currNode, end, newSegments, segments, start;
+    segments = [];
     currNode = this.firstNode;
     while (currNode !== null && currNode.next !== null) {
       start = currNode;
       end = currNode.next;
-      newLines = this.flattenBezier(start, start.controlRight, end.controlLeft, end, threshold, steps);
-      lines = lines.concat(newLines);
+      newSegments = this.flattenBezier(start, start.controlRight, end.controlLeft, end, threshold, steps);
+      segments = segments.concat(newSegments);
       currNode = currNode.next;
     }
-    return lines;
+    return segments;
   };
 
   Curve.prototype.flattenBezier = function(p0, p1, p2, p3, threshold, steps) {
@@ -557,7 +580,10 @@ Curve = (function() {
       coords.push(currCoord);
       testLine = [startCoord, currCoord];
       if ((offPoints(coords, testLine)) > threshold) {
-        lastSegment = [startCoord, currCoord];
+        lastSegment = {
+          line: [startCoord, currCoord],
+          curve: [t, p0, p1, p2, p3]
+        };
         lines.push(lastSegment);
         startCoord = currCoord;
         coords = [];
@@ -566,7 +592,10 @@ Curve = (function() {
       }
       t += stepSize;
     }
-    lastSegment = [startCoord, v(p3)];
+    lastSegment = {
+      line: [startCoord, v(p3)],
+      curve: [t, p0, p1, p2, p3]
+    };
     lines.push(lastSegment);
     return lines;
   };

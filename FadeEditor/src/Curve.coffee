@@ -14,19 +14,36 @@ class Curve
 		
 		@debug = false
 	
-	outputNodes: (threshold, steps) ->
-		lines = @flatten threshold, steps
+	outputNodes: (threshold, maxXOffset = 0, steps) ->
+		segments = @flatten threshold, steps
 		output = []
-		for line in lines
-			output.push (v line[0].x, (line[0].y - @topOffset))
+		for segment in segments
+			line = segment.line
+			[t, p0, p1, p2, p3] = segment.curve
+			
+			output.push (v (Math.floor line[0].x), (Math.floor (line[0].y - @topOffset)))
+			
+			if maxXOffset > 0
+				xOffset = Math.abs (line[0].x - line[1].x)
+				if xOffset > maxXOffset
+					numExtraNodes = Math.floor (xOffset/maxXOffset)
+					for i in [1..numExtraNodes]
+						x = line[0].x + (i*maxXOffset)
+						t = cubicBezierAtX x, p0, p1, p2, p3
+						y = (cubicBezier t, p0, p1, p2, p3).y
+						outX = (Math.floor x)
+						outY = (Math.floor (y - @topOffset))
+						output.push (v outX, outY)
+			
 		
-		line = lines[lines.length-1]
-		output.push (v line[1].x, (line[1].y - @topOffset))
+		segment = segments[segments.length-1]
+		line = segment.line
+		output.push (v (Math.floor line[1].x), (Math.floor (line[1].y - @topOffset)))
 		
 		return output
 	
 	flatten: (threshold, steps) ->
-		lines = []
+		segments = []
 		
 		currNode = @firstNode
 		while currNode != null and currNode.next != null
@@ -34,19 +51,17 @@ class Curve
 			start = currNode
 			end = currNode.next
 			
-			newLines = @flattenBezier start, start.controlRight, end.controlLeft, end, threshold, steps
-			lines = lines.concat newLines
+			newSegments = @flattenBezier start, start.controlRight, end.controlLeft, end, threshold, steps
+			segments = segments.concat newSegments
 			
 			currNode = currNode.next
-		return lines
-			
-	# TODO: make this operate over entire curve to eliminate nodes as required points
-	# (although it might be nice to guarantee hitting the nodes?)
+		return segments
+	
 	flattenBezier: (p0, p1, p2, p3, threshold, steps) ->
 		# x length?
 		threshold = 2 if not threshold
-		steps = 128 if not steps
-
+		steps = 128 if not steps # Math.floor((Math.abs (p0.x - p3.x))/2)
+		
 		offPoints = (coords, line) ->
 			numPoints = 0
 			for coord in coords
@@ -77,7 +92,11 @@ class Curve
 			
 			# error too large, make a new line segment
 			if (offPoints coords, testLine) > threshold
-				lastSegment = [startCoord, currCoord]
+				lastSegment = {
+					line: [startCoord, currCoord],
+					curve: [t, p0, p1, p2, p3]
+				}
+				
 				lines.push lastSegment
 
 				startCoord = currCoord
@@ -86,8 +105,11 @@ class Curve
 				lastSegment = testLine
 
 			t += stepSize
-
-		lastSegment = [startCoord, v p3]
+		
+		lastSegment = {
+			line: [startCoord, v p3],
+			curve: [t, p0, p1, p2, p3]
+		}
 		lines.push lastSegment
 		
 		return lines

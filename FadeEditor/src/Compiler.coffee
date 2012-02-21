@@ -14,53 +14,47 @@ class Compiler
 		# TODO: timing multiplier (256 = 1 microsecond, 256 = 1 second, or 256 = 1 minute, etc.)
 		
 		'''
-		#include <avr/io.h>
-		#include <util/delay.h>
+		// Start
+		
 		'''
 	
 	generatePostlude: ->
 		'''
-		int main( void ) {
-			DDRB = 1;
-			PORTB = 0;
-			
-			// TODO: set up interrupts
-			// and write code
-			
-			return 0;
-		}
+		// Do stuff
+		
 		'''
 		
 	
 	generateGammaTableCode: ->
-		outputCode = 'uint8_t gamma[' + @gammaTableSize + '] = {\n'
-		outputCode += @gammaTable.join ',\n'
-		outputCode += '\n};\n'
+		outputCode = 'gamma = {\n'
+		outputCode += @gammaTable.join ','
+		outputCode += '\n}\n'
 		
 		return outputCode
 		
 	generatePathCode: ->
 		outputCode = '''
-		typedef struct {
-			// 256 = 1 second
-			uint16_t t;
-			
-			// 255 = 100%
-			uint8_t dutyCycle;
-		} pwmKeyframe_t;
-		'''
+		// Byte 1: Time Offset (since last)
+		// Byte 2: Intensity value (raw)
 		
-		coordCode = (coord) ->
-			'{' + (Math.floor coord.x) + ',' + (Math.floor coord.y) + '}'
+		'''
 		
 		pathID = 0
 		for path in @paths
-			pathCode = 'pwmKeyframe_t path' + pathID + '[' + path.length + '] = {\n'
-			pathCode += (path.map coordCode).join ',\n'
-			pathCode += '};\n'
+			console.log path, path.length
+			pathCode = ''
+			
+			outputCode += '// Channel ' + pathID + '\n'
+			offsetPath = []
+			prevX = 0
+			for coord in path
+				offsetPath.push (coord.x - prevX) + ',' + coord.y
+				prevX = coord.x
+			
+			pathCode += (offsetPath).join ',\n'
 			pathID += 1
 			
-			outputCode += pathCode
+			outputCode += pathCode + '\n'
 		
 		return outputCode
 		
@@ -74,7 +68,7 @@ class Compiler
 		@paths = []
 		for curve in curves
 			height = curve.height
-			@paths.push curve.outputNodes( )
+			@paths.push (curve.outputNodes flattenBy, @maxValue)
 		
 		outputCode += @generatePathCode( )
 		

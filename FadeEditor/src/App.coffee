@@ -357,21 +357,22 @@ class App extends core.App
 		# draw flattened lines
 		if @debug
 			for curve in @curves
-				for line in (curve.flatten flattenBy)
-					ctx.lineWidth = 1
-					ctx.strokeStyle = "rgb(255,255,255)"
-					ctx.beginPath( )
-					ctx.moveTo line[0].x, line[0].y
-					ctx.lineTo line[1].x, line[1].y
-					ctx.stroke( )
+				ctx.lineWidth = 1
+				ctx.strokeStyle = "rgb(255,255,255)"
+				ctx.beginPath( )
+				ctx.moveTo curve.firstNode.x, curve.firstNode.y
+				
+				flattenedNodes = (curve.outputNodes flattenBy, 255)
+				
+				for node in flattenedNodes
+					ctx.lineTo node.x, (node.y + curve.topOffset)
 					
+				ctx.stroke( )
+				
+				for node in flattenedNodes
 					ctx.fillStyle = "rgb(255,255,255)"
 					ctx.beginPath( )
-					ctx.arc line[0].x, line[0].y, 3, 0, TAU
+					ctx.arc node.x, (node.y + curve.topOffset), 3, 0, TAU
 					ctx.fill( )
 					
-					ctx.beginPath( )
-					ctx.arc line[1].x, line[1].y, 3, 0, TAU
-					ctx.fill( )
-			
 		ctx.restore( )
