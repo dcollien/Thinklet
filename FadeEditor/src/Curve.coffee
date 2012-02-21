@@ -14,8 +14,8 @@ class Curve
 		
 		@debug = false
 	
-	outputNodes: (threshold, maxXOffset = 0, steps) ->
-		segments = @flatten threshold, steps
+	outputNodes: (threshold, maxXOffset = 0, stepSize) ->
+		segments = @flatten threshold, stepSize
 		output = []
 		for segment in segments
 			line = segment.line
@@ -45,7 +45,7 @@ class Curve
 		
 		return output
 	
-	flatten: (threshold, steps) ->
+	flatten: (threshold, stepSize) ->
 		segments = []
 		
 		currNode = @firstNode
@@ -54,16 +54,15 @@ class Curve
 			start = currNode
 			end = currNode.next
 			
-			newSegments = @flattenBezier start, start.controlRight, end.controlLeft, end, threshold, steps
+			newSegments = @flattenBezier start, start.controlRight, end.controlLeft, end, threshold, stepSize
 			segments = segments.concat newSegments
 			
 			currNode = currNode.next
 		return segments
 	
-	flattenBezier: (p0, p1, p2, p3, threshold, steps) ->
+	flattenBezier: (p0, p1, p2, p3, threshold, stepSize = 8) ->
 		# x length?
 		threshold = 2 if not threshold
-		steps = 128 if not steps # Math.floor((Math.abs (p0.x - p3.x))/2)
 		
 		offPoints = (coords, line) ->
 			numPoints = 0
@@ -79,15 +78,15 @@ class Curve
 		
 		
 		lines = []
-
-		stepSize = 1/steps
-
+		
 		lastSegment = [v p0, v p1]
 		startCoord = v p0
 
 		coords = []
-		t = stepSize
-		while t < 1
+		x = Math.floor(p0.x/stepSize) * stepSize
+		x += stepSize
+		while x < p3.x
+			t = cubicBezierAtX x, p0, p1, p2, p3
 			currCoord = cubicBezier t, p0, p1, p2, p3
 			coords.push currCoord
 			
@@ -106,9 +105,9 @@ class Curve
 				coords = []
 			else
 				lastSegment = testLine
-
-			t += stepSize
-		
+			
+			x += stepSize
+			
 		lastSegment = {
 			line: [startCoord, v p3],
 			curve: [t, p0, p1, p2, p3]

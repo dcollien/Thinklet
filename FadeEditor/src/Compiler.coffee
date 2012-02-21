@@ -69,6 +69,11 @@ class Compiler
 		return outputCode
 		
 	compile: (curves) ->
+		stepSize = 8
+		maxOffset = @maxValue * stepSize
+		
+		scaleNode = (node) -> (v Math.floor(node.x/stepSize), node.y)
+		
 		outputCode =  @generatePrelude( )
 		
 		if @gamma > 1
@@ -78,7 +83,11 @@ class Compiler
 		@paths = []
 		for curve in curves
 			height = curve.height
-			@paths.push (curve.outputNodes flattenBy, @maxValue)
+			
+			
+			path = (curve.outputNodes flattenBy, maxOffset, stepSize)
+			path = path.map scaleNode
+			@paths.push path
 		
 		outputCode += @generatePathCode( )
 		

@@ -362,7 +362,7 @@ class App extends core.App
 				ctx.beginPath( )
 				ctx.moveTo curve.firstNode.x, curve.firstNode.y
 				
-				flattenedNodes = (curve.outputNodes flattenBy, 255)
+				flattenedNodes = (curve.outputNodes flattenBy, 255*8, 8)
 				
 				for node in flattenedNodes
 					ctx.lineTo node.x, (node.y + curve.topOffset)

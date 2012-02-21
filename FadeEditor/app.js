@@ -329,7 +329,7 @@ App = (function(_super) {
         ctx.strokeStyle = "rgb(196,196,196)";
         ctx.beginPath();
         ctx.moveTo(curve.firstNode.x, curve.firstNode.y);
-        flattenedNodes = curve.outputNodes(flattenBy, 255);
+        flattenedNodes = curve.outputNodes(flattenBy, 255 * 8, 8);
         for (_l = 0, _len4 = flattenedNodes.length; _l < _len4; _l++) {
           node = flattenedNodes[_l];
           ctx.lineTo(node.x, node.y + curve.topOffset);
@@ -426,7 +426,12 @@ Compiler = (function() {
   };
 
   Compiler.prototype.compile = function(curves) {
-    var curve, height, outputCode, _i, _len;
+    var curve, height, maxOffset, outputCode, path, scaleNode, stepSize, _i, _len;
+    stepSize = 8;
+    maxOffset = this.maxValue * stepSize;
+    scaleNode = function(node) {
+      return v(Math.floor(node.x / stepSize), node.y);
+    };
     outputCode = this.generatePrelude();
     if (this.gamma > 1) {
       this.makeGammaTable();
@@ -436,7 +441,9 @@ Compiler = (function() {
     for (_i = 0, _len = curves.length; _i < _len; _i++) {
       curve = curves[_i];
       height = curve.height;
-      this.paths.push(curve.outputNodes(flattenBy, this.maxValue));
+      path = curve.outputNodes(flattenBy, maxOffset, stepSize);
+      path = path.map(scaleNode);
+      this.paths.push(path);
     }
     outputCode += this.generatePathCode();
     outputCode += this.generatePostlude();
@@ -525,10 +532,10 @@ Curve = (function() {
     this.debug = false;
   }
 
-  Curve.prototype.outputNodes = function(threshold, maxXOffset, steps) {
+  Curve.prototype.outputNodes = function(threshold, maxXOffset, stepSize) {
     var i, line, numExtraNodes, outX, outY, output, p0, p1, p2, p3, segment, segments, t, x, xOffset, y, _i, _len, _ref;
     if (maxXOffset == null) maxXOffset = 0;
-    segments = this.flatten(threshold, steps);
+    segments = this.flatten(threshold, stepSize);
     output = [];
     for (_i = 0, _len = segments.length; _i < _len; _i++) {
       segment = segments[_i];
@@ -556,24 +563,24 @@ Curve = (function() {
     return output;
   };
 
-  Curve.prototype.flatten = function(threshold, steps) {
+  Curve.prototype.flatten = function(threshold, stepSize) {
     var currNode, end, newSegments, segments, start;
     segments = [];
     currNode = this.firstNode;
     while (currNode !== null && currNode.next !== null) {
       start = currNode;
       end = currNode.next;
-      newSegments = this.flattenBezier(start, start.controlRight, end.controlLeft, end, threshold, steps);
+      newSegments = this.flattenBezier(start, start.controlRight, end.controlLeft, end, threshold, stepSize);
       segments = segments.concat(newSegments);
       currNode = currNode.next;
     }
     return segments;
   };
 
-  Curve.prototype.flattenBezier = function(p0, p1, p2, p3, threshold, steps) {
-    var coords, currCoord, lastSegment, lines, offPoints, startCoord, stepSize, t, testLine;
+  Curve.prototype.flattenBezier = function(p0, p1, p2, p3, threshold, stepSize) {
+    var coords, currCoord, lastSegment, lines, offPoints, startCoord, t, testLine, x;
+    if (stepSize == null) stepSize = 8;
     if (!threshold) threshold = 2;
-    if (!steps) steps = 128;
     offPoints = function(coords, line) {
       var coord, linearError, linearErrorX, linearErrorY, numPoints, _i, _len;
       numPoints = 0;
@@ -587,12 +594,13 @@ Curve = (function() {
       return numPoints;
     };
     lines = [];
-    stepSize = 1 / steps;
     lastSegment = [v(p0, v(p1))];
     startCoord = v(p0);
     coords = [];
-    t = stepSize;
-    while (t < 1) {
+    x = Math.floor(p0.x / stepSize) * stepSize;
+    x += stepSize;
+    while (x < p3.x) {
+      t = cubicBezierAtX(x, p0, p1, p2, p3);
       currCoord = cubicBezier(t, p0, p1, p2, p3);
       coords.push(currCoord);
       testLine = [startCoord, currCoord];
@@ -607,7 +615,7 @@ Curve = (function() {
       } else {
         lastSegment = testLine;
       }
-      t += stepSize;
+      x += stepSize;
     }
     lastSegment = {
       line: [startCoord, v(p3)],
