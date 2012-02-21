@@ -9,6 +9,7 @@ App = (function(_super) {
   function App() {
     var i, numCurves;
     App.__super__.constructor.call(this);
+    this.scrollBox = $('.centerbox');
     this.gridSize = 8;
     this.barLength = 256;
     this.curveHeight = 256;
@@ -35,7 +36,7 @@ App = (function(_super) {
   }
 
   App.prototype.updateDragging = function(dt) {
-    var curve, diff, mouse, _i, _len, _ref;
+    var curve, diff, globalY, mouse, _i, _len, _ref;
     if (this.pushDrag) {
       mouse = v.sub(core.canvasMouse(), this.pan);
       diff = v.sub(mouse, this.pushDrag);
@@ -55,6 +56,9 @@ App = (function(_super) {
       mouse = core.canvasMouse();
       diff = v.sub(mouse, this.dragPan);
       this.pan = v.add(diff, this.pan);
+      globalY = core.screenMouse().y;
+      this.scrollBox.scrollTop(this.scrollBox.scrollTop() - (globalY - this.scrollStart));
+      this.scrollStart = globalY;
       this.pan.y = 0;
       if (this.pan.x > this.maxPanX) this.pan.x = this.maxPanX;
       this.dragPan = v(mouse);
@@ -82,7 +86,8 @@ App = (function(_super) {
     this.dragControl = null;
     this.dragPan = null;
     this.pushDrag = null;
-    return this.pushStart = null;
+    this.pushStart = null;
+    return this.scrollStart = null;
   };
 
   App.prototype.createNode = function() {
@@ -147,14 +152,11 @@ App = (function(_super) {
       if (this.pan.x > this.maxPanX) this.pan.x = this.maxPanX;
       this.invalidate();
     }
-    /*
-    		if core.input.down 'pan-up'
-    			@pan.y -= @panSpeed
-    			@invalidate( )	
-    		else if core.input.down 'pan-down'
-    			@pan.y += @panSpeed
-    			@invalidate( )
-    */
+    if (core.input.down('pan-up')) {
+      this.scrollBox.scrollTop(this.scrollBox.scrollTop() - this.panSpeed);
+    } else if (core.input.down('pan-down')) {
+      this.scrollBox.scrollTop(this.scrollBox.scrollTop() + this.panSpeed);
+    }
     if (core.input.pressed('left-mouse')) {
       $('.context-menu').fadeOut('fast');
       this.resetDrag();
@@ -183,6 +185,7 @@ App = (function(_super) {
             this.createNode();
           } else {
             this.dragPan = v(core.canvasMouse());
+            this.scrollStart = core.screenMouse().y;
           }
         }
       }

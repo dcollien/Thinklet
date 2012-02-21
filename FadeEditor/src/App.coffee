@@ -3,7 +3,7 @@ class App extends core.App
 	constructor: ->
 		super( )
 		
-		
+		@scrollBox = $('.centerbox')
 		@gridSize = 8
 		@barLength = 256
 		
@@ -63,6 +63,11 @@ class App extends core.App
 			diff = v.sub mouse, @dragPan
 			@pan = v.add diff, @pan
 			
+			
+			globalY = core.screenMouse( ).y
+			@scrollBox.scrollTop (@scrollBox.scrollTop( ) - (globalY - @scrollStart))
+			@scrollStart = globalY
+			
 			# constrain y pan
 			@pan.y = 0
 			
@@ -104,6 +109,7 @@ class App extends core.App
 		@dragPan = null
 		@pushDrag = null
 		@pushStart = null
+		@scrollStart = null
 
 	createNode: ->
 		return if not @disectionNode.coord
@@ -161,14 +167,16 @@ class App extends core.App
 				
 			@invalidate( )
 		
-		###
+		
 		if core.input.down 'pan-up'
-			@pan.y -= @panSpeed
-			@invalidate( )	
+			@scrollBox.scrollTop (@scrollBox.scrollTop( ) - @panSpeed)
+			#@pan.y -= @panSpeed
+			#@invalidate( )	
 		else if core.input.down 'pan-down'
-			@pan.y += @panSpeed
-			@invalidate( )
-		###
+			@scrollBox.scrollTop (@scrollBox.scrollTop( ) + @panSpeed)
+			#@pan.y += @panSpeed
+			#@invalidate( )
+		
 			
 		# register the different start-drags
 		if core.input.pressed 'left-mouse'
@@ -198,6 +206,7 @@ class App extends core.App
 						@createNode( )
 					else
 						@dragPan = v core.canvasMouse( )
+						@scrollStart = core.screenMouse( ).y
 				
 		# stop dragging	
 		if core.input.released 'left-mouse'
