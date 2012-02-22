@@ -1,5 +1,5 @@
 class Curve
-	constructor: (@topOffset) ->
+	constructor: (@topOffset, @stepSize) ->
 		@height = 256
 		
 		@color = "rgb(0,0,255)"
@@ -15,6 +15,10 @@ class Curve
 		@debug = false
 	
 	outputNodes: (threshold, maxXOffset = 0, stepSize) ->
+		
+		stepSnap = (x) ->
+			Math.round( x/stepSize ) * stepSize
+		
 		segments = @flatten threshold, stepSize
 		output = []
 		
@@ -26,7 +30,7 @@ class Curve
 			[t, p0, p1, p2, p3] = segment.curve
 			
 			# add the first coord in each line
-			output.push (v (Math.floor line[0].x), (Math.floor (line[0].y - @topOffset)))
+			output.push (v stepSnap(line[0].x), (Math.floor (line[0].y - @topOffset)))
 			
 			if maxXOffset > 0
 				xOffset = Math.abs (line[0].x - line[1].x)
@@ -35,7 +39,7 @@ class Curve
 					for i in [1..numExtraNodes]
 						# put in extra nodes so that a max X distance is never exceeded
 						# get the Y value by finding where on the bezier the x value sits
-						x = line[0].x + (i*maxXOffset)
+						x = stepSnap( line[0].x ) + (i*maxXOffset)
 						t = cubicBezierAtX x, p0, p1, p2, p3
 						y = (cubicBezier t, p0, p1, p2, p3).y
 						outX = (Math.floor x)
@@ -45,7 +49,7 @@ class Curve
 		# add the last coord in the last line
 		segment = segments[segments.length-1]
 		line = segment.line
-		output.push (v (Math.floor line[1].x), (Math.floor (line[1].y - @topOffset)))
+		output.push (v stepSnap(line[1].x), (Math.floor (line[1].y - @topOffset)))
 		
 		return output
 	
@@ -129,7 +133,7 @@ class Curve
 				t = cubicBezierAtX x, currNode, currNode.controlRight, currNode.next.controlLeft, currNode.next
 				controls = cubicDeCasteljau t, currNode, currNode.controlRight, currNode.next.controlLeft, currNode.next
 				
-				node = new CurveNode( @, disectionPoint, controls[0], controls[1] )
+				node = new CurveNode( @, disectionPoint, controls[0], controls[1], @stepSize )
 				currNode.controlRight.moveTo controls[2]
 				currNode.next.controlLeft.moveTo controls[3]
 				
@@ -148,7 +152,7 @@ class Curve
 		
 	
 	addNode: (pos, leftCP, rightCP) ->
-		node = new CurveNode( @, pos, leftCP, rightCP )
+		node = new CurveNode( @, pos, leftCP, rightCP, @stepSize )
 		
 		if @firstNode == null
 			@firstNode = node

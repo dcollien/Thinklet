@@ -40,6 +40,7 @@ run = ->
 	core.input.bind core.key.K, 'keyframe'
 	core.input.bind core.key.SHIFT, 'push'
 	core.input.bind core.key.CTRL, 'precision'
+	core.input.bind core.key.X, 'snapX'
 
 	app = new App( )
 	app.run( )

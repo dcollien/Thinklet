@@ -26,11 +26,11 @@ class App extends core.App
 		
 		@curves = []
 		
-		@maxPanX = 64
+		@maxPanX = 32
 		@lastFlattern = null
 		
 		for i in [0...numCurves]
-			@curves.push new Curve( @curveSpacing + i*(@curveSpacing + @curveHeight) )
+			@curves.push new Curve( @curveSpacing + i*(@curveSpacing + @curveHeight), @gridSize )
 			
 		@dragNode = null
 		@dragControl = null
@@ -88,7 +88,7 @@ class App extends core.App
 			mouse = v.sub core.canvasMouse( ), @pan
 			
 			@disectionNode.coord = null
-			@dragNode.moveTo mouse
+			@dragNode.moveTo mouse, (core.input.down 'snapX')
 				
 			@invalidate( )
 		

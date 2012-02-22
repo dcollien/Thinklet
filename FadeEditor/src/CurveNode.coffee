@@ -1,5 +1,5 @@
 class CurveNode
-	constructor: (@curve, coord, leftCP, rightCP) ->
+	constructor: (@curve, coord, leftCP, rightCP, @stepSize) ->
 		@moveTo coord
 		@isSelected = false
 		
@@ -98,8 +98,15 @@ class CurveNode
 			@controlRight.moveTo rightVect
 		
 		
-	moveTo: (coord) ->
+	moveTo: (coord, snap = false) ->
 		
+		snapX = (x) => Math.round( x / @stepSize) * @stepSize
+		
+		
+		if snap
+			console.log @stepSize, coord.x, snapX coord.x
+			coord.x = snapX coord.x
+			
 		# how much it moved by this update
 		nodeMove = v.sub coord, @
 		
@@ -155,7 +162,7 @@ class CurveNode
 				
 		# update movement vector with constrained values
 		nodeMove = v.sub coord, @
-		
+			
 		@x = coord.x
 		@y = coord.y
 		

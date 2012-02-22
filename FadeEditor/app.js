@@ -23,10 +23,10 @@ App = (function(_super) {
     this.panSpeed = 3.0;
     this.zoom = 1.0;
     this.curves = [];
-    this.maxPanX = 64;
+    this.maxPanX = 32;
     this.lastFlattern = null;
     for (i = 0; 0 <= numCurves ? i < numCurves : i > numCurves; 0 <= numCurves ? i++ : i--) {
-      this.curves.push(new Curve(this.curveSpacing + i * (this.curveSpacing + this.curveHeight)));
+      this.curves.push(new Curve(this.curveSpacing + i * (this.curveSpacing + this.curveHeight), this.gridSize));
     }
     this.dragNode = null;
     this.dragControl = null;
@@ -76,7 +76,7 @@ App = (function(_super) {
     } else if (this.dragNode) {
       mouse = v.sub(core.canvasMouse(), this.pan);
       this.disectionNode.coord = null;
-      this.dragNode.moveTo(mouse);
+      this.dragNode.moveTo(mouse, core.input.down('snapX'));
       return this.invalidate();
     } else if (this.dragControl) {
       mouse = v.sub(core.canvasMouse(), this.pan);
@@ -532,8 +532,9 @@ ControlNode = (function() {
 
 Curve = (function() {
 
-  function Curve(topOffset) {
+  function Curve(topOffset, stepSize) {
     this.topOffset = topOffset;
+    this.stepSize = stepSize;
     this.height = 256;
     this.color = "rgb(0,0,255)";
     this.firstNode = null;
@@ -544,8 +545,11 @@ Curve = (function() {
   }
 
   Curve.prototype.outputNodes = function(threshold, maxXOffset, stepSize) {
-    var i, line, numExtraNodes, outX, outY, output, p0, p1, p2, p3, segment, segments, t, x, xOffset, y, _i, _len, _ref;
+    var i, line, numExtraNodes, outX, outY, output, p0, p1, p2, p3, segment, segments, stepSnap, t, x, xOffset, y, _i, _len, _ref;
     if (maxXOffset == null) maxXOffset = 0;
+    stepSnap = function(x) {
+      return Math.round(x / stepSize) * stepSize;
+    };
     segments = this.flatten(threshold, stepSize);
     output = [];
     maxXOffset = Math.floor(maxXOffset / stepSize) * stepSize;
@@ -553,13 +557,13 @@ Curve = (function() {
       segment = segments[_i];
       line = segment.line;
       _ref = segment.curve, t = _ref[0], p0 = _ref[1], p1 = _ref[2], p2 = _ref[3], p3 = _ref[4];
-      output.push(v(Math.floor(line[0].x), Math.floor(line[0].y - this.topOffset)));
+      output.push(v(stepSnap(line[0].x), Math.floor(line[0].y - this.topOffset)));
       if (maxXOffset > 0) {
         xOffset = Math.abs(line[0].x - line[1].x);
         if (xOffset > maxXOffset) {
           numExtraNodes = Math.floor(xOffset / maxXOffset);
           for (i = 1; 1 <= numExtraNodes ? i <= numExtraNodes : i >= numExtraNodes; 1 <= numExtraNodes ? i++ : i--) {
-            x = line[0].x + (i * maxXOffset);
+            x = stepSnap(line[0].x) + (i * maxXOffset);
             t = cubicBezierAtX(x, p0, p1, p2, p3);
             y = (cubicBezier(t, p0, p1, p2, p3)).y;
             outX = Math.floor(x);
@@ -571,7 +575,7 @@ Curve = (function() {
     }
     segment = segments[segments.length - 1];
     line = segment.line;
-    output.push(v(Math.floor(line[1].x), Math.floor(line[1].y - this.topOffset)));
+    output.push(v(stepSnap(line[1].x), Math.floor(line[1].y - this.topOffset)));
     return output;
   };
 
@@ -645,7 +649,7 @@ Curve = (function() {
       if (x > currNode.x && x < currNode.next.x) {
         t = cubicBezierAtX(x, currNode, currNode.controlRight, currNode.next.controlLeft, currNode.next);
         controls = cubicDeCasteljau(t, currNode, currNode.controlRight, currNode.next.controlLeft, currNode.next);
-        node = new CurveNode(this, disectionPoint, controls[0], controls[1]);
+        node = new CurveNode(this, disectionPoint, controls[0], controls[1], this.stepSize);
         currNode.controlRight.moveTo(controls[2]);
         currNode.next.controlLeft.moveTo(controls[3]);
         node.prev = currNode;
@@ -662,7 +666,7 @@ Curve = (function() {
 
   Curve.prototype.addNode = function(pos, leftCP, rightCP) {
     var node;
-    node = new CurveNode(this, pos, leftCP, rightCP);
+    node = new CurveNode(this, pos, leftCP, rightCP, this.stepSize);
     if (this.firstNode === null) {
       this.firstNode = node;
       this.lastNode = node;
@@ -850,8 +854,9 @@ Curve = (function() {
 
 CurveNode = (function() {
 
-  function CurveNode(curve, coord, leftCP, rightCP) {
+  function CurveNode(curve, coord, leftCP, rightCP, stepSize) {
     this.curve = curve;
+    this.stepSize = stepSize;
     this.moveTo(coord);
     this.isSelected = false;
     if (leftCP) this.controlLeft = new ControlNode(leftCP, this, 'left');
@@ -932,8 +937,17 @@ CurveNode = (function() {
     }
   };
 
-  CurveNode.prototype.moveTo = function(coord) {
-    var constrained, newControlX, nodeMove;
+  CurveNode.prototype.moveTo = function(coord, snap) {
+    var constrained, newControlX, nodeMove, snapX,
+      _this = this;
+    if (snap == null) snap = false;
+    snapX = function(x) {
+      return Math.round(x / _this.stepSize) * _this.stepSize;
+    };
+    if (snap) {
+      console.log(this.stepSize, coord.x, snapX(coord.x));
+      coord.x = snapX(coord.x);
+    }
     nodeMove = v.sub(coord, this);
     constrained = false;
     if (this === this.curve.firstNode) coord.x = 0;
@@ -1073,6 +1087,7 @@ run = function() {
   core.input.bind(core.key.K, 'keyframe');
   core.input.bind(core.key.SHIFT, 'push');
   core.input.bind(core.key.CTRL, 'precision');
+  core.input.bind(core.key.X, 'snapX');
   app = new App();
   app.run();
   window.onblur = function() {
