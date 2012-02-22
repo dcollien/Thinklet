@@ -17,6 +17,10 @@ class Curve
 	outputNodes: (threshold, maxXOffset = 0, stepSize) ->
 		segments = @flatten threshold, stepSize
 		output = []
+		
+		# ensure step size is maintained
+		maxXOffset = Math.floor( maxXOffset/stepSize ) * stepSize
+		
 		for segment in segments
 			line = segment.line
 			[t, p0, p1, p2, p3] = segment.curve
@@ -61,7 +65,6 @@ class Curve
 		return segments
 	
 	flattenBezier: (p0, p1, p2, p3, threshold, stepSize = 8) ->
-		# x length?
 		threshold = 2 if not threshold
 		
 		offPoints = (coords, line) ->
@@ -79,7 +82,6 @@ class Curve
 		
 		lines = []
 		
-		lastSegment = [v p0, v p1]
 		startCoord = v p0
 
 		coords = []
@@ -88,25 +90,26 @@ class Curve
 		while x < p3.x
 			t = cubicBezierAtX x, p0, p1, p2, p3
 			currCoord = cubicBezier t, p0, p1, p2, p3
+			currCoord.x = x
 			coords.push currCoord
 			
 			testLine = [startCoord, currCoord]
 			
-			# error too large, make a new line segment
-			if (offPoints coords, testLine) > threshold
+			if (x % stepSize) == 0
+				# only add segments on full steps
 				lastSegment = {
 					line: [startCoord, currCoord],
 					curve: [t, p0, p1, p2, p3]
 				}
-				
+			
+			# error too large, make a new line segment
+			if (offPoints coords, testLine) > threshold
 				lines.push lastSegment
 
-				startCoord = currCoord
+				startCoord = lastSegment.line[1]
 				coords = []
-			else
-				lastSegment = testLine
 			
-			x += stepSize
+			x += 1
 			
 		lastSegment = {
 			line: [startCoord, v p3],

@@ -69,10 +69,11 @@ class Compiler
 		return outputCode
 		
 	compile: (curves) ->
+		curveHeight = 256
 		stepSize = 8
 		maxOffset = @maxValue * stepSize
 		
-		scaleNode = (node) -> (v Math.floor(node.x/stepSize), node.y)
+		scaleNode = (node) => v Math.floor(node.x/stepSize), Math.round(@maxValue*node.y/curveHeight)
 		
 		outputCode =  @generatePrelude( )
 		

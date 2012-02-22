@@ -24,6 +24,7 @@ App = (function(_super) {
     this.zoom = 1.0;
     this.curves = [];
     this.maxPanX = 64;
+    this.lastFlattern = null;
     for (i = 0; 0 <= numCurves ? i < numCurves : i > numCurves; 0 <= numCurves ? i++ : i--) {
       this.curves.push(new Curve(this.curveSpacing + i * (this.curveSpacing + this.curveHeight)));
     }
@@ -118,7 +119,7 @@ App = (function(_super) {
   };
 
   App.prototype.update = function(dt) {
-    var $canvas, curve, menu, menuPos, mouse, node, _i, _j, _k, _len, _len2, _len3, _ref, _ref2, _ref3;
+    var $canvas, curve, menu, menuPos, mouse, node, _i, _j, _k, _l, _len, _len2, _len3, _len4, _ref, _ref2, _ref3, _ref4;
     mouse = v.sub(core.canvasMouse(), this.pan);
     if (core.input.pressed('push')) {
       $canvas = $(canvas);
@@ -145,8 +146,14 @@ App = (function(_super) {
         }
       }
     }
-    if (core.input.down('keyframe')) {
+    if (core.input.pressed('keyframe')) {
       this.showKeyframes = true;
+      this.lastFlatten = [];
+      _ref2 = this.curves;
+      for (_j = 0, _len2 = _ref2.length; _j < _len2; _j++) {
+        curve = _ref2[_j];
+        this.lastFlatten.push(curve.outputNodes(flattenBy, 255 * 8, 8));
+      }
       this.invalidate();
     }
     if (core.input.released('keyframe')) {
@@ -175,9 +182,9 @@ App = (function(_super) {
       } else if (core.input.down('precision')) {
         this.createNode();
       } else {
-        _ref2 = this.curves;
-        for (_j = 0, _len2 = _ref2.length; _j < _len2; _j++) {
-          curve = _ref2[_j];
+        _ref3 = this.curves;
+        for (_k = 0, _len3 = _ref3.length; _k < _len3; _k++) {
+          curve = _ref3[_k];
           this.dragNode = curve.nodeAtMouse(this.pan);
           if (this.dragNode) {
             this.dragNode.isSelected = true;
@@ -201,9 +208,9 @@ App = (function(_super) {
     }
     if (core.input.released('left-mouse')) this.resetDrag();
     if (core.input.pressed('right-mouse')) {
-      _ref3 = this.curves;
-      for (_k = 0, _len3 = _ref3.length; _k < _len3; _k++) {
-        curve = _ref3[_k];
+      _ref4 = this.curves;
+      for (_l = 0, _len4 = _ref4.length; _l < _len4; _l++) {
+        curve = _ref4[_l];
         node = curve.nodeAtMouse(this.pan);
         if (node) break;
       }
@@ -261,7 +268,7 @@ App = (function(_super) {
   };
 
   App.prototype.draw = function() {
-    var bar, currY, curve, flattenedNodes, node, point, _i, _j, _k, _l, _len, _len2, _len3, _len4, _len5, _len6, _m, _n, _ref, _ref2, _ref3, _ref4, _ref5;
+    var bar, currY, curve, flattenedNodes, i, node, point, _i, _j, _k, _l, _len, _len2, _len3, _len4, _len5, _len6, _m, _n, _ref, _ref2, _ref3, _ref4, _ref5;
     App.__super__.draw.call(this);
     this.drawBackground();
     this.drawGrid();
@@ -322,6 +329,7 @@ App = (function(_super) {
     }
     this.disectionNode.draw();
     if (this.showKeyframes) {
+      i = 0;
       _ref4 = this.curves;
       for (_k = 0, _len3 = _ref4.length; _k < _len3; _k++) {
         curve = _ref4[_k];
@@ -329,7 +337,7 @@ App = (function(_super) {
         ctx.strokeStyle = "rgb(196,196,196)";
         ctx.beginPath();
         ctx.moveTo(curve.firstNode.x, curve.firstNode.y);
-        flattenedNodes = curve.outputNodes(flattenBy, 255 * 8, 8);
+        flattenedNodes = this.lastFlatten[i];
         for (_l = 0, _len4 = flattenedNodes.length; _l < _len4; _l++) {
           node = flattenedNodes[_l];
           ctx.lineTo(node.x, node.y + curve.topOffset);
@@ -345,6 +353,7 @@ App = (function(_super) {
           ctx.fill();
           ctx.stroke();
         }
+        i += 1;
       }
     }
     _ref5 = this.curves;
@@ -426,11 +435,13 @@ Compiler = (function() {
   };
 
   Compiler.prototype.compile = function(curves) {
-    var curve, height, maxOffset, outputCode, path, scaleNode, stepSize, _i, _len;
+    var curve, curveHeight, height, maxOffset, outputCode, path, scaleNode, stepSize, _i, _len,
+      _this = this;
+    curveHeight = 256;
     stepSize = 8;
     maxOffset = this.maxValue * stepSize;
     scaleNode = function(node) {
-      return v(Math.floor(node.x / stepSize), node.y);
+      return v(Math.floor(node.x / stepSize), Math.round(_this.maxValue * node.y / curveHeight));
     };
     outputCode = this.generatePrelude();
     if (this.gamma > 1) {
@@ -537,6 +548,7 @@ Curve = (function() {
     if (maxXOffset == null) maxXOffset = 0;
     segments = this.flatten(threshold, stepSize);
     output = [];
+    maxXOffset = Math.floor(maxXOffset / stepSize) * stepSize;
     for (_i = 0, _len = segments.length; _i < _len; _i++) {
       segment = segments[_i];
       line = segment.line;
@@ -594,7 +606,6 @@ Curve = (function() {
       return numPoints;
     };
     lines = [];
-    lastSegment = [v(p0, v(p1))];
     startCoord = v(p0);
     coords = [];
     x = Math.floor(p0.x / stepSize) * stepSize;
@@ -602,20 +613,21 @@ Curve = (function() {
     while (x < p3.x) {
       t = cubicBezierAtX(x, p0, p1, p2, p3);
       currCoord = cubicBezier(t, p0, p1, p2, p3);
+      currCoord.x = x;
       coords.push(currCoord);
       testLine = [startCoord, currCoord];
-      if ((offPoints(coords, testLine)) > threshold) {
+      if ((x % stepSize) === 0) {
         lastSegment = {
           line: [startCoord, currCoord],
           curve: [t, p0, p1, p2, p3]
         };
-        lines.push(lastSegment);
-        startCoord = currCoord;
-        coords = [];
-      } else {
-        lastSegment = testLine;
       }
-      x += stepSize;
+      if ((offPoints(coords, testLine)) > threshold) {
+        lines.push(lastSegment);
+        startCoord = lastSegment.line[1];
+        coords = [];
+      }
+      x += 1;
     }
     lastSegment = {
       line: [startCoord, v(p3)],

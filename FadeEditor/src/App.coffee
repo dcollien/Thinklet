@@ -27,7 +27,7 @@ class App extends core.App
 		@curves = []
 		
 		@maxPanX = 64
-		
+		@lastFlattern = null
 		
 		for i in [0...numCurves]
 			@curves.push new Curve( @curveSpacing + i*(@curveSpacing + @curveHeight) )
@@ -151,8 +151,13 @@ class App extends core.App
 				@disectionNode.move mouse.x, curve.firstNode
 				@invalidate( ) if @lastMouse and @disectionNode.coord and not v.eq mouse, @lastMouse
 		
-		if core.input.down 'keyframe'
+		if core.input.pressed 'keyframe'
 			@showKeyframes = true
+			
+			@lastFlatten = []
+			for curve in @curves
+				@lastFlatten.push (curve.outputNodes flattenBy, 255*8, 8) 
+			
 			@invalidate( )
 		
 		if core.input.released 'keyframe'
@@ -356,13 +361,14 @@ class App extends core.App
 		
 		# draw flattened lines
 		if @showKeyframes
+			i = 0
 			for curve in @curves
 				ctx.lineWidth = 2
 				ctx.strokeStyle = "rgb(196,196,196)"
 				ctx.beginPath( )
 				ctx.moveTo curve.firstNode.x, curve.firstNode.y
 				
-				flattenedNodes = (curve.outputNodes flattenBy, 255*8, 8)
+				flattenedNodes = @lastFlatten[i]
 				
 				for node in flattenedNodes
 					ctx.lineTo node.x, (node.y + curve.topOffset)
@@ -377,7 +383,8 @@ class App extends core.App
 					ctx.arc node.x, (node.y + curve.topOffset), 3, 0, TAU
 					ctx.fill( )
 					ctx.stroke( )
-					
+				
+				i += 1
 					
 		# draw curve nodes
 		for curve in @curves
