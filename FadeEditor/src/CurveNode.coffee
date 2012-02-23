@@ -35,9 +35,9 @@ class CurveNode
 		
 	getControlNode: (type) ->
 		if type == 'left'
-			return @controlLeft
+			return @getLeftCP( )
 		if type == 'right'
-			return @controlRight
+			return @getRightCP( )
 	
 	flatten: ->
 		if @controlLeft
@@ -48,27 +48,61 @@ class CurveNode
 			@controlRight.x = @x 
 			@controlRight.y = @y
 	
-	reset: ->
-		@controlLeft.moveTo (v @x-32, @y)
-		@controlRight.moveTo (v @x+32, @y)
+	getLeftCP: ->
+		if @curve.endpointLock and this is @curve.firstNode
+			return @curve.lastNode.controlLeft
+		else
+			return @controlLeft
+	
+	getRightCP: ->
+		if @curve.endpointLock and this is @curve.lastNode
+			return @curve.firstNode.controlRight
+		else
+			return @controlRight
 			
+	reset: ->
+		ctrlLeft = @getLeftCP( )
+		ctrlRight = @getRightCP( )
+
+		ctrlLeft.moveTo (v ctrlLeft.parentNode.x-32, ctrlLeft.parentNode.y) if ctrlLeft
+		ctrlRight.moveTo (v ctrlRight.parentNode.x+32, ctrlRight.parentNode.y) if ctrlRight
+		
+		console.log ctrlLeft.parentNode.x-32, ctrlRight.parentNode.x+32
+		
 		if @style == 'smooth' or @style == 'symmetric'
 			@smooth( )
-		else if @style != 'flat'
-			@flatten( )
+		else if @style == 'flat'
+			@style = 'sharp'
+		
+	consolidateEndpoints: ->
+		if @curve.endpointLock
+			if this is @curve.firstNode
+				@curve.lastNode.style = @style
+			else if this is @curve.lastNode
+				@curve.firstNode.style = @style
 		
 	smooth: ->
+		ctrlLeft = v @getLeftCP( )
+		ctrlRight = v @getRightCP( )
+				
+		leftIsLastLeft = this is @curve.firstNode and @curve.endpointLock
+		rightIsFirstRight  = this is @curve.lastNode and @curve.endpointLock
 		
-		if @controlLeft and v.eq @controlLeft, @
+		if leftIsLastLeft
+			ctrlLeft = (v ctrlLeft.x - @curve.lastNode.x, ctrlLeft.y)
+		if rightIsFirstRight
+			ctrlRight = (v ctrlRight.x + @curve.lastNode.x, ctrlRight.y)
+		
+		if ctrlLeft and v.eq ctrlLeft, @
 			@reset( )
 		
-		if @controlRight and v.eq @controlRight, @
+		if ctrlRight and v.eq ctrlRight, @
 			@reset( )
 			
-		if @controlLeft and @controlRight
+		if ctrlLeft and ctrlRight
 			# vectors from this parent node to the control points
-			leftOffset  = (v.sub @, @controlLeft)
-			rightOffset = (v.sub @, @controlRight)
+			leftOffset  = (v.sub @, ctrlLeft)
+			rightOffset = (v.sub @, ctrlRight)
 
 			# unit vectors of the above
 			leftUnit  = v.unit leftOffset
@@ -94,11 +128,20 @@ class CurveNode
 			rightVect = (v.add @, rightVect)
 
 			# move the control points to their new positions
-			@controlLeft.moveTo leftVect
-			@controlRight.moveTo rightVect
+			
+			if leftIsLastLeft
+				@curve.lastNode.controlLeft.moveTo (v (leftVect.x+@curve.lastNode.x), leftVect.y)
+			else
+				@controlLeft.moveTo leftVect
+			
+			if rightIsFirstRight
+				@curve.firstNode.controlRight.moveTo (v (rightVect.x-@curve.lastNode.x), rightVect.y)
+			else
+				@controlRight.moveTo rightVect
 		
 		
-	moveTo: (coord, snap = false) ->
+	moveTo: (coord, snap = false, bubble=true) ->
+		#return if not @curve.enabled
 		
 		snapX = (x) => Math.round( x / @stepSize) * @stepSize
 		
@@ -166,6 +209,12 @@ class CurveNode
 		@x = coord.x
 		@y = coord.y
 		
+		if bubble and @curve.endpointLock
+			if this is @curve.firstNode
+				@curve.lastNode.moveTo (v @curve.lastNode.x, @y), snap, false
+			if this is @curve.lastNode
+				@curve.firstNode.moveTo (v @curve.firstNode.x, @y), snap, false
+				
 		# move control points with the moving of the curve
 		if @controlLeft
 			@controlLeft.moveTo (v.add @controlLeft, nodeMove)

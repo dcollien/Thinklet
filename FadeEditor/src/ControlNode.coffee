@@ -32,6 +32,16 @@ class ControlNode
 		
 		# fetch the opposite control node
 		otherNode = @parentNode.getControlNode @oppositeType( )
+		
+		curve = @parentNode.curve
+		useLast  = curve.endpointLock and @parentNode is curve.firstNode and otherNode is curve.lastNode.controlLeft
+		useFirst = curve.endpointLock and @parentNode is curve.lastNode and otherNode is curve.firstNode.controlRight
+		
+		if useLast
+			otherNode.x -= curve.lastNode.x
+		else if useFirst
+			otherNode.x += curve.lastNode.x
+		
 		if otherNode and (v.sub @parentNode, @).len( ) > 0			
 			# doing stuff to the other control node:
 			
@@ -54,7 +64,12 @@ class ControlNode
 			newVect = v.add @parentNode, newVectFromParent
 			
 			# move the opposite control point to its new location
-			otherNode.moveTo newVect
+			if useLast
+				otherNode.moveTo (v (newVect.x+curve.lastNode.x), newVect.y)
+			else if useFirst
+				otherNode.moveTo (v (newVect.x-curve.lastNode.x), newVect.y)
+			else
+				otherNode.moveTo newVect
 			
 	moveTo: (coord) ->
 		coord = @constrain coord

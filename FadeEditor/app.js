@@ -1,4 +1,4 @@
-var App, Compiler, ControlNode, Curve, CurveNode, DisectionNode, canvas, ctx, flattenBy, nodeColors, run,
+var App, Compiler, ControlNode, Curve, CurveNode, DisectionNode, canvas, ctx, nodeColors, run,
   __hasProp = Object.prototype.hasOwnProperty,
   __extends = function(child, parent) { for (var key in parent) { if (__hasProp.call(parent, key)) child[key] = parent[key]; } function ctor() { this.constructor = child; } ctor.prototype = parent.prototype; child.prototype = new ctor; child.__super__ = parent.prototype; return child; };
 
@@ -16,7 +16,7 @@ App = (function(_super) {
     this.curveSpacing = 32;
     numCurves = 6;
     this.width = 800;
-    this.height = this.curveSpacing + numCurves * (this.curveSpacing + this.curveHeight);
+    this.height = 2 * this.curveSpacing + numCurves * (this.curveSpacing + this.curveHeight);
     canvas.height = this.height;
     canvas.width = this.width;
     this.pan = v(0, 0);
@@ -25,6 +25,7 @@ App = (function(_super) {
     this.curves = [];
     this.maxPanX = 32;
     this.lastFlattern = null;
+    this.timeMultiplier = 1;
     for (i = 0; 0 <= numCurves ? i < numCurves : i > numCurves; 0 <= numCurves ? i++ : i--) {
       this.curves.push(new Curve(this.curveSpacing + i * (this.curveSpacing + this.curveHeight), this.gridSize));
     }
@@ -34,6 +35,8 @@ App = (function(_super) {
     this.pushStart = null;
     this.pushMode = false;
     this.disectionNode = new DisectionNode();
+    this.verticalPanEnabled = true;
+    this.timeSnapEnabled = false;
   }
 
   App.prototype.updateColors = function() {
@@ -46,7 +49,7 @@ App = (function(_super) {
   };
 
   App.prototype.updateDragging = function(dt) {
-    var curve, diff, globalY, mouse, _i, _len, _ref;
+    var curve, diff, globalY, mouse, snap, _i, _len, _ref;
     if (this.pushDrag) {
       mouse = v.sub(core.canvasMouse(), this.pan);
       diff = v.sub(mouse, this.pushDrag);
@@ -66,9 +69,11 @@ App = (function(_super) {
       mouse = core.canvasMouse();
       diff = v.sub(mouse, this.dragPan);
       this.pan = v.add(diff, this.pan);
-      globalY = core.screenMouse().y;
-      this.scrollBox.scrollTop(this.scrollBox.scrollTop() - (globalY - this.scrollStart));
-      this.scrollStart = globalY;
+      if (this.verticalPanEnabled) {
+        globalY = core.screenMouse().y;
+        this.scrollBox.scrollTop(this.scrollBox.scrollTop() - (globalY - this.scrollStart));
+        this.scrollStart = globalY;
+      }
       this.pan.y = 0;
       if (this.pan.x > this.maxPanX) this.pan.x = this.maxPanX;
       this.dragPan = v(mouse);
@@ -76,7 +81,9 @@ App = (function(_super) {
     } else if (this.dragNode) {
       mouse = v.sub(core.canvasMouse(), this.pan);
       this.disectionNode.coord = null;
-      this.dragNode.moveTo(mouse, core.input.down('snapX'));
+      snap = core.input.down('snapX');
+      if (this.timeSnapEnabled) snap = !snap;
+      this.dragNode.moveTo(mouse, snap);
       return this.invalidate();
     } else if (this.dragControl) {
       mouse = v.sub(core.canvasMouse(), this.pan);
@@ -100,6 +107,11 @@ App = (function(_super) {
     return this.scrollStart = null;
   };
 
+  App.prototype.setDeviation = function(channel, deviation) {
+    console.log(deviation);
+    return this.curves[channel].deviationThreshold = deviation;
+  };
+
   App.prototype.createNode = function() {
     var coord, curve, _i, _len, _ref, _results;
     if (!this.disectionNode.coord) return;
@@ -108,7 +120,7 @@ App = (function(_super) {
     _results = [];
     for (_i = 0, _len = _ref.length; _i < _len; _i++) {
       curve = _ref[_i];
-      if (coord.y > curve.topOffset && coord.y < curve.topOffset + curve.height) {
+      if (curve.enabled && coord.y > curve.topOffset && coord.y < curve.topOffset + curve.height) {
         this.dragNode = curve.disectAt(coord);
         break;
       } else {
@@ -118,8 +130,26 @@ App = (function(_super) {
     return _results;
   };
 
+  App.prototype.setEnabled = function(index, enabled) {
+    console.log(index, this.curves[index]);
+    return this.curves[index].enabled = enabled;
+  };
+
+  App.prototype.toggleChannelRepeat = function(channel) {
+    return this.curves[channel].repeats = !this.curves[channel].repeats;
+  };
+
+  App.prototype.setEndpointLock = function(channel, lock) {
+    var curve, newEndpoint;
+    curve = this.curves[channel];
+    curve.endpointLock = lock;
+    newEndpoint = v(curve.lastNode.x, curve.firstNode.y);
+    curve.lastNode.moveTo(newEndpoint);
+    return this.invalidate();
+  };
+
   App.prototype.update = function(dt) {
-    var $canvas, curve, menu, menuPos, mouse, node, _i, _j, _k, _l, _len, _len2, _len3, _len4, _ref, _ref2, _ref3, _ref4;
+    var $canvas, color, curve, intensity, led, ledData, ledIndex, menu, menuPos, mouse, node, _i, _j, _k, _l, _len, _len2, _len3, _len4, _ref, _ref2, _ref3, _ref4;
     mouse = v.sub(core.canvasMouse(), this.pan);
     if (core.input.pressed('push')) {
       $canvas = $(canvas);
@@ -136,15 +166,27 @@ App = (function(_super) {
     } else if (core.input.released('precision')) {
       $(canvas).css('cursor', 'auto');
     }
+    ledIndex = 0;
     _ref = this.curves;
     for (_i = 0, _len = _ref.length; _i < _len; _i++) {
       curve = _ref[_i];
-      if (mouse.y > curve.topOffset && mouse.y < curve.topOffset + curve.height) {
+      if (mouse.y >= curve.topOffset && mouse.y <= curve.topOffset + curve.height) {
         this.disectionNode.move(mouse.x, curve.firstNode);
         if (this.lastMouse && this.disectionNode.coord && !v.eq(mouse, this.lastMouse)) {
+          led = $('#led' + ledIndex);
+          ledData = led.data();
+          if (ledData) {
+            color = new RGBColor(led.data().color);
+            intensity = 1 - (this.disectionNode.coord.y - curve.topOffset) / curve.height;
+            color.r = Math.floor(color.r * intensity);
+            color.g = Math.floor(color.g * intensity);
+            color.b = Math.floor(color.b * intensity);
+            led.css('background-color', color.toRGB());
+          }
           this.invalidate();
         }
       }
+      ledIndex += 1;
     }
     if (core.input.pressed('keyframe')) {
       this.showKeyframes = true;
@@ -152,7 +194,7 @@ App = (function(_super) {
       _ref2 = this.curves;
       for (_j = 0, _len2 = _ref2.length; _j < _len2; _j++) {
         curve = _ref2[_j];
-        this.lastFlatten.push(curve.outputNodes(flattenBy, 255 * 8, 8));
+        this.lastFlatten.push(curve.outputNodes(255 * 8, 8));
       }
       this.invalidate();
     }
@@ -267,8 +309,33 @@ App = (function(_super) {
     return ctx.fillRect(0, 0, this.width, this.height);
   };
 
+  App.prototype.timeAtBar = function(bar) {
+    var highStr, highUnits, highValue, lowUnits, lowValue, value;
+    value = bar * this.timeMultiplier;
+    if (this.timeMultiplier < 0.5) {
+      lowUnits = 'ms';
+      highUnits = 'sec';
+      highValue = Math.floor(value);
+      lowValue = (value - highValue) * 1000;
+    } else if (this.timeMultiplier >= 60) {
+      lowUnits = 'min';
+      highUnits = 'hours';
+      value /= 60;
+      highValue = Math.floor(value / 60);
+      lowValue = value - (highValue * 60);
+    } else {
+      lowUnits = 'sec';
+      highUnits = 'min';
+      highValue = Math.floor(value / 60);
+      lowValue = value - (highValue * 60);
+    }
+    highStr = '';
+    if (highValue > 0) highStr = highValue.toString() + ' ' + highUnits + ' ';
+    return highStr + lowValue + ' ' + lowUnits;
+  };
+
   App.prototype.draw = function() {
-    var bar, currY, curve, flattenedNodes, i, node, point, _i, _j, _k, _l, _len, _len2, _len3, _len4, _len5, _len6, _m, _n, _ref, _ref2, _ref3, _ref4, _ref5;
+    var bar, currY, curve, flattenedNodes, i, node, point, xPos, _i, _j, _k, _l, _len, _len2, _len3, _len4, _len5, _len6, _len7, _m, _n, _o, _ref, _ref2, _ref3, _ref4, _ref5, _ref6;
     App.__super__.draw.call(this);
     this.drawBackground();
     this.drawGrid();
@@ -289,21 +356,36 @@ App = (function(_super) {
       ctx.moveTo(0, curve.topOffset + curve.height);
       ctx.lineTo(this.width, curve.topOffset + curve.height);
       ctx.stroke();
+      if (!curve.enabled) {
+        ctx.fillStyle = "rgba(0,0,0,0.3)";
+        ctx.fillRect(0, curve.topOffset, this.width, curve.height);
+      }
     }
+    ctx.fillStyle = "rgb(0,0,0)";
+    ctx.fillRect(0, this.height - this.curveSpacing * 2, this.width, this.curveSpacing);
     ctx.restore();
     ctx.save();
     ctx.translate(this.pan.x, 0);
     for (bar = -4, _ref2 = 4 * this.width / this.barLength; -4 <= _ref2 ? bar < _ref2 : bar > _ref2; -4 <= _ref2 ? bar++ : bar--) {
+      xPos = bar * this.barLength / 4 - (Math.floor(this.pan.x / this.barLength)) * this.barLength;
       if (bar % 4 === 0) {
         ctx.strokeStyle = "rgb(192,192,192)";
+        ctx.textBaseline = "middle";
+        ctx.fillStyle = "rgb(196,196,196)";
+        ctx.font = "10pt Arial";
+        _ref3 = this.curves;
+        for (_j = 0, _len2 = _ref3.length; _j < _len2; _j++) {
+          curve = _ref3[_j];
+          ctx.fillText(this.timeAtBar((bar / 4) - Math.floor(this.pan.x / this.barLength)), xPos + 10, curve.topOffset - this.curveSpacing / 2 + this.pan.y);
+        }
       } else if (bar % 2 === 0) {
         ctx.strokeStyle = "rgb(128,128,128)";
       } else {
         ctx.strokeStyle = "rgb(64,64,64)";
       }
       ctx.beginPath();
-      ctx.moveTo(bar * this.barLength / 4 - (Math.floor(this.pan.x / this.barLength)) * this.barLength, 0);
-      ctx.lineTo(bar * this.barLength / 4 - (Math.floor(this.pan.x / this.barLength)) * this.barLength, this.height);
+      ctx.moveTo(xPos, 0);
+      ctx.lineTo(xPos, this.height);
       ctx.stroke();
     }
     ctx.restore();
@@ -322,29 +404,30 @@ App = (function(_super) {
     }
     ctx.save();
     ctx.translate(this.pan.x, this.pan.y);
-    _ref3 = this.curves;
-    for (_j = 0, _len2 = _ref3.length; _j < _len2; _j++) {
-      curve = _ref3[_j];
+    _ref4 = this.curves;
+    for (_k = 0, _len3 = _ref4.length; _k < _len3; _k++) {
+      curve = _ref4[_k];
       curve.drawSegments();
+      if (curve.repeats) curve.drawRepeats(this.pan, this.width);
     }
     this.disectionNode.draw();
     if (this.showKeyframes) {
       i = 0;
-      _ref4 = this.curves;
-      for (_k = 0, _len3 = _ref4.length; _k < _len3; _k++) {
-        curve = _ref4[_k];
+      _ref5 = this.curves;
+      for (_l = 0, _len4 = _ref5.length; _l < _len4; _l++) {
+        curve = _ref5[_l];
         ctx.lineWidth = 2;
         ctx.strokeStyle = "rgb(196,196,196)";
         ctx.beginPath();
         ctx.moveTo(curve.firstNode.x, curve.firstNode.y);
         flattenedNodes = this.lastFlatten[i];
-        for (_l = 0, _len4 = flattenedNodes.length; _l < _len4; _l++) {
-          node = flattenedNodes[_l];
+        for (_m = 0, _len5 = flattenedNodes.length; _m < _len5; _m++) {
+          node = flattenedNodes[_m];
           ctx.lineTo(node.x, node.y + curve.topOffset);
         }
         ctx.stroke();
-        for (_m = 0, _len5 = flattenedNodes.length; _m < _len5; _m++) {
-          node = flattenedNodes[_m];
+        for (_n = 0, _len6 = flattenedNodes.length; _n < _len6; _n++) {
+          node = flattenedNodes[_n];
           ctx.fillStyle = "rgb(255,255,255)";
           ctx.strokeStyle = "rgb(0,0,0)";
           ctx.lineWidth = 1;
@@ -356,9 +439,9 @@ App = (function(_super) {
         i += 1;
       }
     }
-    _ref5 = this.curves;
-    for (_n = 0, _len6 = _ref5.length; _n < _len6; _n++) {
-      curve = _ref5[_n];
+    _ref6 = this.curves;
+    for (_o = 0, _len7 = _ref6.length; _o < _len7; _o++) {
+      curve = _ref6[_o];
       if (!this.showKeyframes) curve.drawControlLines();
       curve.drawNodes();
     }
@@ -452,7 +535,7 @@ Compiler = (function() {
     for (_i = 0, _len = curves.length; _i < _len; _i++) {
       curve = curves[_i];
       height = curve.height;
-      path = curve.outputNodes(flattenBy, maxOffset, stepSize);
+      path = curve.outputNodes(maxOffset, stepSize);
       path = path.map(scaleNode);
       this.paths.push(path);
     }
@@ -503,9 +586,17 @@ ControlNode = (function() {
   };
 
   ControlNode.prototype.smooth = function() {
-    var coord, distance, newParentAngle, newUnitVect, newVect, newVectFromParent, otherNode;
+    var coord, curve, distance, newParentAngle, newUnitVect, newVect, newVectFromParent, otherNode, useFirst, useLast;
     coord = v(this);
     otherNode = this.parentNode.getControlNode(this.oppositeType());
+    curve = this.parentNode.curve;
+    useLast = curve.endpointLock && this.parentNode === curve.firstNode && otherNode === curve.lastNode.controlLeft;
+    useFirst = curve.endpointLock && this.parentNode === curve.lastNode && otherNode === curve.firstNode.controlRight;
+    if (useLast) {
+      otherNode.x -= curve.lastNode.x;
+    } else if (useFirst) {
+      otherNode.x += curve.lastNode.x;
+    }
     if (otherNode && (v.sub(this.parentNode, this)).len() > 0) {
       newParentAngle = (v.sub(this.parentNode, coord)).angle();
       if (this.parentNode.style === 'symmetric') {
@@ -516,7 +607,13 @@ ControlNode = (function() {
       newUnitVect = v.forAngle(newParentAngle);
       newVectFromParent = v.mul(newUnitVect, distance);
       newVect = v.add(this.parentNode, newVectFromParent);
-      return otherNode.moveTo(newVect);
+      if (useLast) {
+        return otherNode.moveTo(v(newVect.x + curve.lastNode.x, newVect.y));
+      } else if (useFirst) {
+        return otherNode.moveTo(v(newVect.x - curve.lastNode.x, newVect.y));
+      } else {
+        return otherNode.moveTo(newVect);
+      }
     }
   };
 
@@ -542,11 +639,18 @@ Curve = (function() {
     this.addNode(v(0, this.height / 2 + this.topOffset), null, v(128, this.height / 2 + this.topOffset));
     this.addNode(v(this.height * 3, this.height / 2 + this.topOffset), v(this.height * 3 - 128, this.height / 2 + this.topOffset), null);
     this.debug = false;
+    this.enabled = true;
+    this.deviationThreshold = 4;
+    this.repeats = false;
+    this.endpointLock = false;
+    this.disabledColor = 'rgb(64,64,64)';
+    this.repeatColor = 'rgb(128,128,128)';
   }
 
-  Curve.prototype.outputNodes = function(threshold, maxXOffset, stepSize) {
-    var i, line, numExtraNodes, outX, outY, output, p0, p1, p2, p3, segment, segments, stepSnap, t, x, xOffset, y, _i, _len, _ref;
+  Curve.prototype.outputNodes = function(maxXOffset, stepSize) {
+    var i, line, numExtraNodes, outX, outY, output, p0, p1, p2, p3, segment, segments, stepSnap, t, threshold, x, xOffset, y, _i, _len, _ref;
     if (maxXOffset == null) maxXOffset = 0;
+    threshold = this.deviationThreshold;
     stepSnap = function(x) {
       return Math.round(x / stepSize) * stepSize;
     };
@@ -678,15 +782,22 @@ Curve = (function() {
     return node;
   };
 
-  Curve.prototype.drawCurveSegment = function(start, end) {
+  Curve.prototype.drawCurveSegment = function(start, end, xShift) {
     var c1, c2;
+    if (xShift == null) xShift = 0;
     c1 = start.controlRight;
     c2 = end.controlLeft;
     ctx.lineWidth = 2;
-    ctx.strokeStyle = this.color;
+    if (xShift !== 0) {
+      ctx.strokeStyle = this.repeatColor;
+    } else if (this.enabled) {
+      ctx.strokeStyle = this.color;
+    } else {
+      ctx.strokeStyle = this.disabledColor;
+    }
     ctx.beginPath();
-    ctx.moveTo(start.x, start.y);
-    ctx.bezierCurveTo(c1.x, c1.y, c2.x, c2.y, end.x, end.y);
+    ctx.moveTo(start.x + xShift, start.y);
+    ctx.bezierCurveTo(c1.x + xShift, c1.y, c2.x + xShift, c2.y, end.x + xShift, end.y);
     return ctx.stroke();
   };
 
@@ -792,6 +903,26 @@ Curve = (function() {
     return _results;
   };
 
+  Curve.prototype.drawRepeats = function(pan, width) {
+    var i, nodes, offset, _ref, _results;
+    nodes = this.getNodes();
+    offset = this.lastNode.x;
+    _results = [];
+    while ((offset + pan.x) < width) {
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = this.repeatColor;
+      ctx.beginPath();
+      ctx.moveTo(offset, this.lastNode.y);
+      ctx.lineTo(this.firstNode.x + offset, this.firstNode.y);
+      ctx.stroke();
+      for (i = 0, _ref = nodes.length - 1; 0 <= _ref ? i < _ref : i > _ref; 0 <= _ref ? i++ : i--) {
+        this.drawCurveSegment(nodes[i], nodes[i + 1], offset);
+      }
+      _results.push(offset += this.lastNode.x);
+    }
+    return _results;
+  };
+
   Curve.prototype.drawControlLines = function() {
     var node, _i, _len, _ref, _results;
     _ref = this.getNodes();
@@ -816,6 +947,7 @@ Curve = (function() {
 
   Curve.prototype.controlAtMouse = function(pan) {
     var isUnderMouse, node, nodes, radius, _i, _len;
+    if (!this.enabled) return null;
     radius = 6;
     isUnderMouse = function(node) {
       var pannedNode;
@@ -837,6 +969,7 @@ Curve = (function() {
 
   Curve.prototype.nodeAtMouse = function(pan) {
     var dist, node, pannedNode, radius, _i, _len, _ref;
+    if (!this.enabled) return null;
     radius = 6;
     _ref = this.getNodes();
     for (_i = 0, _len = _ref.length; _i < _len; _i++) {
@@ -886,8 +1019,8 @@ CurveNode = (function() {
   };
 
   CurveNode.prototype.getControlNode = function(type) {
-    if (type === 'left') return this.controlLeft;
-    if (type === 'right') return this.controlRight;
+    if (type === 'left') return this.getLeftCP();
+    if (type === 'right') return this.getRightCP();
   };
 
   CurveNode.prototype.flatten = function() {
@@ -901,23 +1034,67 @@ CurveNode = (function() {
     }
   };
 
+  CurveNode.prototype.getLeftCP = function() {
+    if (this.curve.endpointLock && this === this.curve.firstNode) {
+      return this.curve.lastNode.controlLeft;
+    } else {
+      return this.controlLeft;
+    }
+  };
+
+  CurveNode.prototype.getRightCP = function() {
+    if (this.curve.endpointLock && this === this.curve.lastNode) {
+      return this.curve.firstNode.controlRight;
+    } else {
+      return this.controlRight;
+    }
+  };
+
   CurveNode.prototype.reset = function() {
-    this.controlLeft.moveTo(v(this.x - 32, this.y));
-    this.controlRight.moveTo(v(this.x + 32, this.y));
+    var ctrlLeft, ctrlRight;
+    ctrlLeft = this.getLeftCP();
+    ctrlRight = this.getRightCP();
+    if (ctrlLeft) {
+      ctrlLeft.moveTo(v(ctrlLeft.parentNode.x - 32, ctrlLeft.parentNode.y));
+    }
+    if (ctrlRight) {
+      ctrlRight.moveTo(v(ctrlRight.parentNode.x + 32, ctrlRight.parentNode.y));
+    }
+    console.log(ctrlLeft.parentNode.x - 32, ctrlRight.parentNode.x + 32);
     if (this.style === 'smooth' || this.style === 'symmetric') {
       return this.smooth();
-    } else if (this.style !== 'flat') {
-      return this.flatten();
+    } else if (this.style === 'flat') {
+      return this.style = 'sharp';
+    }
+  };
+
+  CurveNode.prototype.consolidateEndpoints = function() {
+    if (this.curve.endpointLock) {
+      if (this === this.curve.firstNode) {
+        return this.curve.lastNode.style = this.style;
+      } else if (this === this.curve.lastNode) {
+        return this.curve.firstNode.style = this.style;
+      }
     }
   };
 
   CurveNode.prototype.smooth = function() {
-    var distance, leftOffset, leftUnit, leftVect, rightOffset, rightUnit, rightVect;
-    if (this.controlLeft && v.eq(this.controlLeft, this)) this.reset();
-    if (this.controlRight && v.eq(this.controlRight, this)) this.reset();
-    if (this.controlLeft && this.controlRight) {
-      leftOffset = v.sub(this, this.controlLeft);
-      rightOffset = v.sub(this, this.controlRight);
+    var ctrlLeft, ctrlRight, distance, leftIsLastLeft, leftOffset, leftUnit, leftVect, rightIsFirstRight, rightOffset, rightUnit, rightVect;
+    ctrlLeft = v(this.getLeftCP());
+    ctrlRight = v(this.getRightCP());
+    leftIsLastLeft = this === this.curve.firstNode && this.curve.endpointLock;
+    rightIsFirstRight = this === this.curve.lastNode && this.curve.endpointLock;
+    if (leftIsLastLeft) {
+      ctrlLeft = v(ctrlLeft.x - this.curve.lastNode.x, ctrlLeft.y);
+    }
+    if (rightIsFirstRight) {
+      ctrlRight = v(ctrlRight.x + this.curve.lastNode.x, ctrlRight.y);
+    }
+    if (ctrlLeft && v.eq(ctrlLeft, this)) this.reset();
+    if (ctrlRight && v.eq(ctrlRight, this)) this.reset();
+    if (ctrlLeft && ctrlRight) {
+      leftOffset = v.sub(this, ctrlLeft);
+      rightOffset = v.sub(this, ctrlRight);
       leftUnit = v.unit(leftOffset);
       rightUnit = v.unit(rightOffset);
       leftVect = v.unit(v.sub(rightUnit, leftUnit));
@@ -932,15 +1109,24 @@ CurveNode = (function() {
       }
       leftVect = v.add(this, leftVect);
       rightVect = v.add(this, rightVect);
-      this.controlLeft.moveTo(leftVect);
-      return this.controlRight.moveTo(rightVect);
+      if (leftIsLastLeft) {
+        this.curve.lastNode.controlLeft.moveTo(v(leftVect.x + this.curve.lastNode.x, leftVect.y));
+      } else {
+        this.controlLeft.moveTo(leftVect);
+      }
+      if (rightIsFirstRight) {
+        return this.curve.firstNode.controlRight.moveTo(v(rightVect.x - this.curve.lastNode.x, rightVect.y));
+      } else {
+        return this.controlRight.moveTo(rightVect);
+      }
     }
   };
 
-  CurveNode.prototype.moveTo = function(coord, snap) {
+  CurveNode.prototype.moveTo = function(coord, snap, bubble) {
     var constrained, newControlX, nodeMove, snapX,
       _this = this;
     if (snap == null) snap = false;
+    if (bubble == null) bubble = true;
     snapX = function(x) {
       return Math.round(x / _this.stepSize) * _this.stepSize;
     };
@@ -993,6 +1179,14 @@ CurveNode = (function() {
     nodeMove = v.sub(coord, this);
     this.x = coord.x;
     this.y = coord.y;
+    if (bubble && this.curve.endpointLock) {
+      if (this === this.curve.firstNode) {
+        this.curve.lastNode.moveTo(v(this.curve.lastNode.x, this.y), snap, false);
+      }
+      if (this === this.curve.lastNode) {
+        this.curve.firstNode.moveTo(v(this.curve.firstNode.x, this.y), snap, false);
+      }
+    }
     if (this.controlLeft) {
       this.controlLeft.moveTo(v.add(this.controlLeft, nodeMove));
     }
@@ -1066,8 +1260,6 @@ canvas = core.canvas;
 
 ctx = core.ctx;
 
-flattenBy = 4;
-
 nodeColors = {
   smooth: "rgb(0,255,0)",
   sharp: "rgb(255,0,0)",
@@ -1076,7 +1268,7 @@ nodeColors = {
 };
 
 run = function() {
-  var activeColorBox, app, colorbox, compiler, i, makeTitles, size;
+  var activeColorBox, activeSettingsChannel, app, colorbox, compiler, i, makeTitles, repeatButton, settingsButton, size;
   compiler = new Compiler;
   core.input.bind(core.key.LEFT_ARROW, 'pan-left');
   core.input.bind(core.key.RIGHT_ARROW, 'pan-right');
@@ -1108,7 +1300,11 @@ run = function() {
     titles = '';
     colors = ['#0000ff', '#00ff00', '#ff0000', '#00ffff', '#ff00ff', '#ffff00'];
     for (i = 0; i < 6; i++) {
-      titles += "				<div class=\"curveTitle flexbox\" id=\"curve" + i + "\">					<div style=\"text-align:center\">						" + i + "						<div class=\"color-select\">							<div class=\"colorbox\" id=\"colorbox" + i + "\" style=\"background-color:" + colors[i] + "\"></div>						</div>					</div>				</div>";
+      $('#led' + i).css('background-color', colors[i]);
+      $("#led" + i).data({
+        color: colors[i]
+      });
+      titles += "				<div class=\"curveTitle flexbox\" id=\"curve" + i + "\">					<div style=\"text-align:center\">						" + i + "						<div class=\"button-icon\" style=\"margin-top:10px\">							<div class=\"colorbox\" id=\"colorbox" + i + "\" style=\"background-color:" + colors[i] + "\"></div>						</div>						<div class=\"button-icon\" style=\"margin-top:10px\" id=\"settings-button" + i + "\">							<i class=\"icon-cog icon-white\"></i>						</div>						<div class=\"button-icon\" style=\"margin-top:10px\" id=\"repeat-button" + i + "\">							<i class=\"icon-repeat icon-white\" id=\"repeat-icon" + i + "\"></i>						</div>					</div>				</div>";
     }
     return titles;
   };
@@ -1118,19 +1314,98 @@ run = function() {
     show: false
   });
   $('#colorchooser').modal("hide");
+  $('#channel-settings').modal({
+    backdrop: false,
+    show: false
+  });
+  $('#channel-settings').modal("hide");
+  $('#settings').modal({
+    backdrop: false,
+    show: false
+  });
+  $('#settings').modal("hide");
+  $('#lights').modal({
+    backdrop: false,
+    show: false
+  });
+  $('#lights').modal("hide");
+  $('#setting-time-per-bar').change(function() {
+    app.timeMultiplier = parseFloat($(this).val());
+    app.invalidate();
+    return true;
+  });
+  $('#setting-snap').click(function() {
+    var enabled;
+    enabled = $(this).prop('checked');
+    app.timeSnapEnabled = enabled;
+    return true;
+  });
+  $('#setting-vpan').click(function() {
+    var enabled;
+    enabled = $(this).prop('checked');
+    app.verticalPanEnabled = enabled;
+    return true;
+  });
   activeColorBox = null;
+  activeSettingsChannel = null;
   $('#farbtastic').farbtastic(function(color) {
-    console.log($(this).data());
-    if (activeColorBox) activeColorBox.css('background-color', color);
+    if (activeColorBox) {
+      activeColorBox.css('background-color', color);
+      $("#led" + activeColorBox.data().index).css('background-color', color);
+      $("#led" + activeColorBox.data().index).data({
+        color: color
+      });
+    }
     return app.updateColors();
   });
+  $('#channel-enabled').click(function() {
+    app.setEnabled(activeSettingsChannel, $(this).prop('checked'));
+    app.invalidate();
+    return true;
+  });
+  $('#channel-deviation').change(function() {
+    app.setDeviation(activeSettingsChannel, parseFloat($(this).val()));
+    app.invalidate();
+    return true;
+  });
+  $('#channel-lock-endpoints').click(function() {
+    app.setEndpointLock(activeSettingsChannel, $(this).prop('checked'));
+    app.curves[activeSettingsChannel].firstNode.consolidateEndpoints();
+    return true;
+  });
   for (i = 0; i < 6; i++) {
+    repeatButton = $('#repeat-button' + i);
+    repeatButton.data({
+      index: i
+    });
+    repeatButton.click(function() {
+      var icon, index;
+      index = $(this).data().index;
+      icon = $('#repeat-icon' + index);
+      icon.toggleClass("icon-white");
+      $(this).toggleClass("button-selected");
+      app.toggleChannelRepeat(index);
+      app.invalidate();
+      return true;
+    });
+    settingsButton = $('#settings-button' + i);
+    settingsButton.data({
+      index: i
+    });
+    settingsButton.click(function() {
+      activeSettingsChannel = $(this).data().index;
+      $('#channel-settings').modal("show");
+      return true;
+    });
     colorbox = $('#colorbox' + i);
+    colorbox.data({
+      index: i
+    });
     colorbox.click(function() {
-      console.log(colorbox);
       activeColorBox = $(this);
       $.farbtastic('#farbtastic').setColor(new RGBColor(activeColorBox.css('background-color')).toHex());
-      return $('#colorchooser').modal("show");
+      $('#colorchooser').modal("show");
+      return true;
     });
   }
   app.updateColors();
@@ -1138,11 +1413,14 @@ run = function() {
     var data;
     data = $('.context-menu').data();
     if (data.node) {
+      if (data.node.style === 'flat') data.node.reset();
       data.node.style = 'smooth';
       data.node.smooth();
+      data.node.consolidateEndpoints();
     }
     $('.context-menu').fadeOut('fast');
-    return app.invalidate();
+    app.invalidate();
+    return true;
   });
   $('#item-sharp-node').click(function() {
     var data;
@@ -1150,9 +1428,11 @@ run = function() {
     if (data.node) {
       if (data.node.style === 'flat') data.node.reset();
       data.node.style = 'sharp';
+      data.node.consolidateEndpoints();
     }
     $('.context-menu').fadeOut('fast');
-    return app.invalidate();
+    app.invalidate();
+    return true;
   });
   $('#item-flat-node').click(function() {
     var data;
@@ -1160,35 +1440,44 @@ run = function() {
     if (data.node) {
       data.node.style = 'flat';
       data.node.flatten();
+      data.node.consolidateEndpoints();
     }
     $('.context-menu').fadeOut('fast');
-    return app.invalidate();
+    app.invalidate();
+    return true;
   });
   $('#item-symmetric-node').click(function() {
     var data;
     data = $('.context-menu').data();
     if (data.node) {
+      if (data.node.style === 'flat') data.node.reset();
       data.node.style = 'symmetric';
       data.node.smooth();
+      data.node.consolidateEndpoints();
     }
     $('.context-menu').fadeOut('fast');
-    return app.invalidate();
+    app.invalidate();
+    return true;
   });
   $('#item-remove-node').click(function() {
     var data;
     data = $('.context-menu').data();
     if (data.node) data.node.remove();
     $('.context-menu').fadeOut('fast');
-    return app.invalidate();
+    app.invalidate();
+    return true;
   });
   $('#item-reset-node').click(function() {
     var data;
     data = $('.context-menu').data();
     if (data.node) data.node.reset();
     $('.context-menu').fadeOut('fast');
-    return app.invalidate();
+    app.invalidate();
+    return true;
   });
+  $('.dialogModal').draggable();
   return $('#compile-button').click(function() {
-    return $('#compile-output').val(compiler.compile(app.curves));
+    $('#compile-output').val(compiler.compile(app.curves));
+    return true;
   });
 };

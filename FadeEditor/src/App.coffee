@@ -13,7 +13,7 @@ class App extends core.App
 		numCurves = 6
 		
 		@width = 800
-		@height = @curveSpacing + numCurves*(@curveSpacing + @curveHeight)
+		@height = 2*@curveSpacing + numCurves*(@curveSpacing + @curveHeight)
 		
 		canvas.height = @height
 		
@@ -29,6 +29,8 @@ class App extends core.App
 		@maxPanX = 32
 		@lastFlattern = null
 		
+		@timeMultiplier = 1
+		
 		for i in [0...numCurves]
 			@curves.push new Curve( @curveSpacing + i*(@curveSpacing + @curveHeight), @gridSize )
 			
@@ -40,6 +42,9 @@ class App extends core.App
 		@pushMode = false
 		
 		@disectionNode = new DisectionNode( )
+		
+		@verticalPanEnabled = true
+		@timeSnapEnabled = false
 	
 	updateColors: ->
 		for i in [0...(@curves.length)]
@@ -68,10 +73,10 @@ class App extends core.App
 			diff = v.sub mouse, @dragPan
 			@pan = v.add diff, @pan
 			
-			
-			globalY = core.screenMouse( ).y
-			@scrollBox.scrollTop (@scrollBox.scrollTop( ) - (globalY - @scrollStart))
-			@scrollStart = globalY
+			if @verticalPanEnabled
+				globalY = core.screenMouse( ).y
+				@scrollBox.scrollTop (@scrollBox.scrollTop( ) - (globalY - @scrollStart))
+				@scrollStart = globalY
 			
 			# constrain y pan
 			@pan.y = 0
@@ -88,7 +93,12 @@ class App extends core.App
 			mouse = v.sub core.canvasMouse( ), @pan
 			
 			@disectionNode.coord = null
-			@dragNode.moveTo mouse, (core.input.down 'snapX')
+			
+			snap = (core.input.down 'snapX')
+			if @timeSnapEnabled
+				snap = not snap
+				
+			@dragNode.moveTo mouse, snap
 				
 			@invalidate( )
 		
@@ -116,16 +126,34 @@ class App extends core.App
 		@pushStart = null
 		@scrollStart = null
 
+	setDeviation: (channel, deviation) ->
+		console.log deviation
+		@curves[channel].deviationThreshold = deviation
+
 	createNode: ->
 		return if not @disectionNode.coord
 		
 		coord = v @disectionNode.coord
 		for curve in @curves
-			if coord.y > curve.topOffset and coord.y < curve.topOffset + curve.height
+			if curve.enabled and coord.y > curve.topOffset and coord.y < curve.topOffset + curve.height
 				@dragNode = curve.disectAt coord
 				break
 		
-
+	setEnabled: (index, enabled) ->
+		console.log index, @curves[index]
+		@curves[index].enabled = enabled
+	
+	toggleChannelRepeat: (channel) ->
+		@curves[channel].repeats = !@curves[channel].repeats
+		
+	setEndpointLock: (channel, lock) ->
+		curve = @curves[channel]
+		curve.endpointLock = lock
+		newEndpoint = (v curve.lastNode.x, curve.firstNode.y)
+		curve.lastNode.moveTo newEndpoint
+		
+		@invalidate( )
+		
 	update:( dt ) ->
 		
 		mouse = v.sub core.canvasMouse( ), @pan
@@ -146,17 +174,33 @@ class App extends core.App
 		else if core.input.released 'precision'
 			$(canvas).css 'cursor', 'auto'
 		
+		ledIndex = 0
 		for curve in @curves
-			if mouse.y > curve.topOffset and mouse.y < curve.topOffset + curve.height
+			if mouse.y >= curve.topOffset and mouse.y <= curve.topOffset + curve.height
 				@disectionNode.move mouse.x, curve.firstNode
-				@invalidate( ) if @lastMouse and @disectionNode.coord and not v.eq mouse, @lastMouse
+				if @lastMouse and @disectionNode.coord and not v.eq mouse, @lastMouse
+					led = $('#led' + ledIndex)
+					ledData = led.data( )
+					
+					if ledData
+						color = new RGBColor( led.data( ).color )
+						intensity = 1 - (@disectionNode.coord.y - curve.topOffset)/curve.height
+						# TODO: all channels at once
+						color.r = Math.floor (color.r * intensity)
+						color.g = Math.floor (color.g * intensity)
+						color.b = Math.floor (color.b * intensity)
+						
+						led.css 'background-color', color.toRGB( )
+					
+					@invalidate( ) 
+			ledIndex += 1
 		
 		if core.input.pressed 'keyframe'
 			@showKeyframes = true
 			
 			@lastFlatten = []
 			for curve in @curves
-				@lastFlatten.push (curve.outputNodes flattenBy, 255*8, 8) 
+				@lastFlatten.push (curve.outputNodes 255*8, 8) 
 			
 			@invalidate( )
 		
@@ -281,6 +325,32 @@ class App extends core.App
 		ctx.fillStyle = "rgb(30,30,30)"
 		ctx.fillRect 0, 0, @width, @height
 
+	timeAtBar: (bar) -> 
+		value = (bar * @timeMultiplier)
+		if @timeMultiplier < 0.5
+			lowUnits = 'ms'
+			highUnits = 'sec'
+			highValue = Math.floor value
+			lowValue = (value - highValue) * 1000
+		else if @timeMultiplier >= 60
+			lowUnits = 'min'
+			highUnits = 'hours'
+			value /= 60
+			highValue = Math.floor (value/60)
+			lowValue = value - (highValue*60)
+			
+		else
+			lowUnits = 'sec'
+			highUnits = 'min'
+			highValue = Math.floor (value/60)
+			lowValue = value - (highValue*60)
+		
+		highStr = ''
+		if highValue > 0
+			highStr = highValue.toString( ) + ' ' + highUnits + ' '
+			
+		return highStr + lowValue + ' ' + lowUnits
+		
 	draw: ->
 		super( )
 		@drawBackground( )
@@ -309,25 +379,47 @@ class App extends core.App
 			ctx.lineTo @width, curve.topOffset + curve.height
 			ctx.stroke( )
 			
+			if not curve.enabled
+				ctx.fillStyle = "rgba(0,0,0,0.3)"
+				ctx.fillRect 0, curve.topOffset, @width, curve.height
+		
+		
+		ctx.fillStyle = "rgb(0,0,0)"
+		ctx.fillRect 0, @height - @curveSpacing*2, @width, @curveSpacing
+		
 		ctx.restore( )
 		
 		# draw bar lines
 		ctx.save( )
 		ctx.translate @pan.x, 0
 		
+		
 		for bar in [-4...(4*@width/@barLength)]
+			
+			
+			xPos = bar*@barLength/4 - (Math.floor (@pan.x / @barLength)) * @barLength
 			
 			if bar % 4 == 0
 				ctx.strokeStyle = "rgb(192,192,192)"
+				
+				ctx.textBaseline = "middle"
+				ctx.fillStyle = "rgb(196,196,196)"
+				ctx.font = "10pt Arial"
+				
+				for curve in @curves
+					ctx.fillText @timeAtBar((bar/4)-Math.floor(@pan.x/@barLength)), xPos + 10, (curve.topOffset - @curveSpacing/2 + @pan.y)
+				
 			else if bar % 2 == 0
 				ctx.strokeStyle = "rgb(128,128,128)"
 			else
 				ctx.strokeStyle = "rgb(64,64,64)"
 				
 			ctx.beginPath( )
-			ctx.moveTo bar*@barLength/4 - (Math.floor (@pan.x / @barLength)) * @barLength, 0
-			ctx.lineTo bar*@barLength/4 - (Math.floor (@pan.x / @barLength)) * @barLength, @height
+			ctx.moveTo xPos, 0
+			ctx.lineTo xPos, @height
 			ctx.stroke( )
+			
+			
 				
 		ctx.restore( )
 		
@@ -354,7 +446,10 @@ class App extends core.App
 		
 	 	# draw curves
 		for curve in @curves
+			
 			curve.drawSegments( )
+			
+			curve.drawRepeats @pan, @width if curve.repeats
 		
 		# draw disection node
 		@disectionNode.draw( )
@@ -391,5 +486,7 @@ class App extends core.App
 			if not @showKeyframes
 				curve.drawControlLines( )
 			curve.drawNodes( )
+			
+		
 				
 		ctx.restore( )

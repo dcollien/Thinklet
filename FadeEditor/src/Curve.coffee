@@ -13,8 +13,18 @@ class Curve
 		@addNode (v @height*3, @height/2+@topOffset), (v @height*3-128, @height/2+@topOffset), null
 		
 		@debug = false
-	
-	outputNodes: (threshold, maxXOffset = 0, stepSize) ->
+		@enabled = true
+		@deviationThreshold = 4
+		
+		@repeats = false
+		
+		@endpointLock = false
+		
+		@disabledColor = 'rgb(64,64,64)'
+		@repeatColor = 'rgb(128,128,128)'
+		
+	outputNodes: (maxXOffset = 0, stepSize) ->
+		threshold = @deviationThreshold
 		
 		stepSnap = (x) ->
 			Math.round( x/stepSize ) * stepSize
@@ -164,15 +174,21 @@ class Curve
 		
 		return node
 		
-	drawCurveSegment: (start, end) ->
+	drawCurveSegment: (start, end, xShift = 0) ->
 		c1 = start.controlRight
 		c2 = end.controlLeft
 		ctx.lineWidth = 2
-		ctx.strokeStyle = @color
 		
+		if xShift != 0
+			ctx.strokeStyle = @repeatColor 
+		else if @enabled
+			ctx.strokeStyle = @color
+		else
+			ctx.strokeStyle = @disabledColor
+			
 		ctx.beginPath( )
-		ctx.moveTo start.x, start.y
-		ctx.bezierCurveTo c1.x, c1.y, c2.x, c2.y, end.x, end.y
+		ctx.moveTo (start.x + xShift), start.y
+		ctx.bezierCurveTo (c1.x + xShift), c1.y, (c2.x + xShift), c2.y, (end.x + xShift), end.y
 		
 		ctx.stroke( )
 	
@@ -271,6 +287,25 @@ class Curve
 		
 		for i in [0...nodes.length-1]
 			@drawCurveSegment nodes[i], nodes[i+1]
+
+	drawRepeats: (pan, width)->
+		nodes = @getNodes( )
+		
+		
+		offset = @lastNode.x
+		
+		while (offset + pan.x) < width
+			ctx.lineWidth = 2
+			ctx.strokeStyle = @repeatColor 
+
+			ctx.beginPath( )
+			ctx.moveTo offset, @lastNode.y
+			ctx.lineTo @firstNode.x + offset, @firstNode.y
+			ctx.stroke( )
+			
+			for i in [0...nodes.length-1]
+				@drawCurveSegment nodes[i], nodes[i+1], offset
+			offset += @lastNode.x
 	
 	drawControlLines: ->
 		@drawControlPoints node for node in @getNodes( )
@@ -279,6 +314,8 @@ class Curve
 		@drawNode node for node in @getNodes( )
 		
 	controlAtMouse: (pan) ->
+		return null if not @enabled
+		
 		radius = 6
 		
 		isUnderMouse = (node) ->
@@ -295,6 +332,8 @@ class Curve
 		return null
 		
 	nodeAtMouse: (pan) ->
+		return null if not @enabled
+		
 		radius = 6
 		for node in @getNodes( )
 			pannedNode = v.add pan, node

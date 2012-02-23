@@ -86,7 +86,7 @@ class Compiler
 			height = curve.height
 			
 			
-			path = (curve.outputNodes flattenBy, maxOffset, stepSize)
+			path = (curve.outputNodes maxOffset, stepSize)
 			path = path.map scaleNode
 			@paths.push path
 		
