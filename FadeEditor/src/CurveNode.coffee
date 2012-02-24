@@ -155,46 +155,7 @@ class CurveNode
 		
 		constrained = false
 		
-		if this is @curve.firstNode
-			coord.x = 0
 		
-		# constrain movement to not let
-		# control points past next or prev nodes
-		if @controlRight
-			newControlX = (@controlRight.x + nodeMove.x)
-			if @next and newControlX > @next.x
-				coord.x = @next.x - (newControlX - coord.x)
-				constrained = true
-			
-			###	
-			newControlY = (@controlRight.y + nodeMove.y)
-			if newControlY < @curve.topOffset
-				coord.y = @curve.topOffset - (newControlY - coord.y)
-			###
-			
-		if @controlLeft
-			newControlX = (@controlLeft.x + nodeMove.x)
-			if @prev and newControlX < @prev.x
-				coord.x = @prev.x - (newControlX - coord.x) 
-				constrained = true
-			
-			###	
-			newControlY = (@controlLeft.y + nodeMove.y)
-			if newControlY < @curve.topOffset
-				coord.y = @curve.topOffset - (newControlY - coord.y)
-			###
-			
-		
-		
-		# a node isn't allowed past its neighbouring control points
-		if @next and coord.x > @next.controlLeft.x
-			coord.x = @next.controlLeft.x
-			constrained = true
-		if @prev and coord.x < @prev.controlRight.x
-			coord.x = @prev.controlRight.x
-			constrained = true
-			
-			
 		# constrain within vertical bounds
 		if coord.y < @curve.topOffset
 			coord.y = @curve.topOffset
@@ -202,10 +163,51 @@ class CurveNode
 		else if coord.y > @curve.topOffset + @curve.height
 			coord.y = @curve.topOffset + @curve.height
 			constrained = true
+		
+		if this is @curve.firstNode
+			coord.x = 0
+		else
+			
+			# constrain movement to not let
+			# control points past next or prev nodes
+			if @controlRight
+				newControlX = (@controlRight.x + nodeMove.x)
+				if @next and newControlX > @next.x
+					coord.x = @next.x - (newControlX - coord.x)
+					constrained = true
+			
+				###	
+				newControlY = (@controlRight.y + nodeMove.y)
+				if newControlY < @curve.topOffset
+					coord.y = @curve.topOffset - (newControlY - coord.y)
+				###
+			
+			if @controlLeft
+				newControlX = (@controlLeft.x + nodeMove.x)
+				if @prev and newControlX < @prev.x
+					coord.x = @prev.x - (newControlX - coord.x) 
+					constrained = true
+			
+				###	
+				newControlY = (@controlLeft.y + nodeMove.y)
+				if newControlY < @curve.topOffset
+					coord.y = @curve.topOffset - (newControlY - coord.y)
+				###
+			
+		
+		
+			# a node isn't allowed past its neighbouring control points
+			if @next and coord.x > @next.controlLeft.x
+				coord.x = @next.controlLeft.x
+				constrained = true
+			if @prev and coord.x < @prev.controlRight.x
+				coord.x = @prev.controlRight.x
+				constrained = true
 				
+		
 		# update movement vector with constrained values
 		nodeMove = v.sub coord, @
-			
+		
 		@x = coord.x
 		@y = coord.y
 		

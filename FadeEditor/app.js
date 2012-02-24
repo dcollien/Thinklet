@@ -1136,45 +1136,48 @@ CurveNode = (function() {
     }
     nodeMove = v.sub(coord, this);
     constrained = false;
-    if (this === this.curve.firstNode) coord.x = 0;
-    if (this.controlRight) {
-      newControlX = this.controlRight.x + nodeMove.x;
-      if (this.next && newControlX > this.next.x) {
-        coord.x = this.next.x - (newControlX - coord.x);
-        constrained = true;
-      }
-      /*	
-      			newControlY = (@controlRight.y + nodeMove.y)
-      			if newControlY < @curve.topOffset
-      				coord.y = @curve.topOffset - (newControlY - coord.y)
-      */
-    }
-    if (this.controlLeft) {
-      newControlX = this.controlLeft.x + nodeMove.x;
-      if (this.prev && newControlX < this.prev.x) {
-        coord.x = this.prev.x - (newControlX - coord.x);
-        constrained = true;
-      }
-      /*	
-      			newControlY = (@controlLeft.y + nodeMove.y)
-      			if newControlY < @curve.topOffset
-      				coord.y = @curve.topOffset - (newControlY - coord.y)
-      */
-    }
-    if (this.next && coord.x > this.next.controlLeft.x) {
-      coord.x = this.next.controlLeft.x;
-      constrained = true;
-    }
-    if (this.prev && coord.x < this.prev.controlRight.x) {
-      coord.x = this.prev.controlRight.x;
-      constrained = true;
-    }
     if (coord.y < this.curve.topOffset) {
       coord.y = this.curve.topOffset;
       constrained = true;
     } else if (coord.y > this.curve.topOffset + this.curve.height) {
       coord.y = this.curve.topOffset + this.curve.height;
       constrained = true;
+    }
+    if (this === this.curve.firstNode) {
+      coord.x = 0;
+    } else {
+      if (this.controlRight) {
+        newControlX = this.controlRight.x + nodeMove.x;
+        if (this.next && newControlX > this.next.x) {
+          coord.x = this.next.x - (newControlX - coord.x);
+          constrained = true;
+        }
+        /*	
+        				newControlY = (@controlRight.y + nodeMove.y)
+        				if newControlY < @curve.topOffset
+        					coord.y = @curve.topOffset - (newControlY - coord.y)
+        */
+      }
+      if (this.controlLeft) {
+        newControlX = this.controlLeft.x + nodeMove.x;
+        if (this.prev && newControlX < this.prev.x) {
+          coord.x = this.prev.x - (newControlX - coord.x);
+          constrained = true;
+        }
+        /*	
+        				newControlY = (@controlLeft.y + nodeMove.y)
+        				if newControlY < @curve.topOffset
+        					coord.y = @curve.topOffset - (newControlY - coord.y)
+        */
+      }
+      if (this.next && coord.x > this.next.controlLeft.x) {
+        coord.x = this.next.controlLeft.x;
+        constrained = true;
+      }
+      if (this.prev && coord.x < this.prev.controlRight.x) {
+        coord.x = this.prev.controlRight.x;
+        constrained = true;
+      }
     }
     nodeMove = v.sub(coord, this);
     this.x = coord.x;
@@ -1329,6 +1332,11 @@ run = function() {
     show: false
   });
   $('#lights').modal("hide");
+  $('#how-to').modal({
+    backdrop: false,
+    show: false
+  });
+  $('#how-to').modal("hide");
   $('#setting-time-per-bar').change(function() {
     app.timeMultiplier = parseFloat($(this).val());
     app.invalidate();

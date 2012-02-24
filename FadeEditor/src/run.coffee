@@ -88,12 +88,14 @@ run = ->
 	$('#lights').modal {backdrop: false, show:false}
 	$('#lights').modal "hide"
 	
+	$('#how-to').modal {backdrop: false, show:false}
+	$('#how-to').modal "hide"
+	
 	$('#setting-time-per-bar').change ->
 		app.timeMultiplier = parseFloat $(this).val( )
 		app.invalidate( )
 		return true
-		
-		
+	
 	$('#setting-snap').click ->
 		enabled = ($(this).prop 'checked')
 		app.timeSnapEnabled = enabled
