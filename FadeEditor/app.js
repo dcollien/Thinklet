@@ -107,8 +107,35 @@ App = (function(_super) {
     return this.scrollStart = null;
   };
 
-  App.prototype.setDeviation = function(channel, deviation) {
-    console.log(deviation);
+  App.prototype.setTimeScale = function(timeScale) {
+    var curve, i, _i, _len, _ref, _results;
+    this.timeMultiplier = timeScale;
+    i = 0;
+    _ref = this.curves;
+    _results = [];
+    for (_i = 0, _len = _ref.length; _i < _len; _i++) {
+      curve = _ref[_i];
+      if (curve.autoDeviation) this.setAutoDeviation(i);
+      _results.push(i += 1);
+    }
+    return _results;
+  };
+
+  App.prototype.setAutoDeviation = function(channel) {
+    if (this.timeMultiplier < 1) {
+      return this.setDeviation(channel, 8, true);
+    } else if (this.timeMultiplier < 2) {
+      return this.setDeviation(channel, 4, true);
+    } else if (this.timeMultiplier < 20) {
+      return this.setDeviation(channel, 2, true);
+    } else {
+      return this.setDeviation(channel, 1, true);
+    }
+  };
+
+  App.prototype.setDeviation = function(channel, deviation, auto) {
+    if (auto == null) auto = false;
+    this.curves[channel].autoDeviation = auto;
     return this.curves[channel].deviationThreshold = deviation;
   };
 
@@ -131,7 +158,6 @@ App = (function(_super) {
   };
 
   App.prototype.setEnabled = function(index, enabled) {
-    console.log(index, this.curves[index]);
     return this.curves[index].enabled = enabled;
   };
 
@@ -641,6 +667,7 @@ Curve = (function() {
     this.debug = false;
     this.enabled = true;
     this.deviationThreshold = 4;
+    this.autoDeviation = true;
     this.repeats = false;
     this.endpointLock = false;
     this.disabledColor = 'rgb(64,64,64)';
@@ -1338,7 +1365,7 @@ run = function() {
   });
   $('#how-to').modal("hide");
   $('#setting-time-per-bar').change(function() {
-    app.timeMultiplier = parseFloat($(this).val());
+    app.setTimeScale(parseFloat($(this).val()));
     app.invalidate();
     return true;
   });
@@ -1372,7 +1399,11 @@ run = function() {
     return true;
   });
   $('#channel-deviation').change(function() {
-    app.setDeviation(activeSettingsChannel, parseFloat($(this).val()));
+    if ($(this).val() === 'auto') {
+      app.setAutoDeviation(activeSettingsChannel);
+    } else {
+      app.setDeviation(activeSettingsChannel, parseFloat($(this).val()));
+    }
     app.invalidate();
     return true;
   });

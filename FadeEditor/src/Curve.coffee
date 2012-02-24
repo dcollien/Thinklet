@@ -16,9 +16,12 @@ class Curve
 		@enabled = true
 		@deviationThreshold = 4
 		
+		@autoDeviation = true
+		
 		@repeats = false
 		
 		@endpointLock = false
+		
 		
 		@disabledColor = 'rgb(64,64,64)'
 		@repeatColor = 'rgb(128,128,128)'

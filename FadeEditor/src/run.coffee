@@ -92,7 +92,7 @@ run = ->
 	$('#how-to').modal "hide"
 	
 	$('#setting-time-per-bar').change ->
-		app.timeMultiplier = parseFloat $(this).val( )
+		app.setTimeScale parseFloat $(this).val( )
 		app.invalidate( )
 		return true
 	
@@ -122,7 +122,10 @@ run = ->
 		return true
 		
 	$('#channel-deviation').change ->
-		app.setDeviation activeSettingsChannel, (parseFloat $(this).val( ))
+		if $(this).val( ) == 'auto'
+			app.setAutoDeviation activeSettingsChannel
+		else
+			app.setDeviation activeSettingsChannel, (parseFloat $(this).val( ))
 		app.invalidate( )
 		return true
 	

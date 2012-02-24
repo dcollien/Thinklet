@@ -126,8 +126,27 @@ class App extends core.App
 		@pushStart = null
 		@scrollStart = null
 
-	setDeviation: (channel, deviation) ->
-		console.log deviation
+	setTimeScale: (timeScale) ->
+		@timeMultiplier = timeScale
+		i = 0
+		for curve in @curves
+			if curve.autoDeviation
+				@setAutoDeviation i
+			i += 1
+
+	setAutoDeviation: (channel) ->
+		if @timeMultiplier < 1
+			@setDeviation channel, 8, true
+		else if @timeMultiplier < 2
+			@setDeviation channel, 4, true
+		else if @timeMultiplier < 20
+			@setDeviation channel, 2, true
+		else
+			@setDeviation channel, 1, true
+		
+
+	setDeviation: (channel, deviation, auto = false) ->
+		@curves[channel].autoDeviation = auto
 		@curves[channel].deviationThreshold = deviation
 
 	createNode: ->
@@ -140,7 +159,6 @@ class App extends core.App
 				break
 		
 	setEnabled: (index, enabled) ->
-		console.log index, @curves[index]
 		@curves[index].enabled = enabled
 	
 	toggleChannelRepeat: (channel) ->
