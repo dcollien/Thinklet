@@ -125,6 +125,7 @@ class App extends core.App
 		@pushDrag = null
 		@pushStart = null
 		@scrollStart = null
+		@invalidate( )
 
 	setTimeScale: (timeScale) ->
 		@timeMultiplier = timeScale
@@ -180,9 +181,11 @@ class App extends core.App
 			$canvas = $(canvas)
 			$canvas.css 'cursor', 'ew-resize'
 			@pushMode = true
+			@invalidate( )
 		else if core.input.released 'push'
 			$(canvas).css 'cursor', 'auto'
 			@pushMode = false
+			@invalidate( )
 		if not core.input.down 'push'
 			@prevPushCursor = null
 			
