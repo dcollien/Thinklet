@@ -3,7 +3,7 @@ class ControlNode
 		@moveTo coord
 		@isSelected = false
 		
-	oppositeType: ->
+	oppositeType: ->		
 		if @type == 'left'
 			return 'right'
 		else

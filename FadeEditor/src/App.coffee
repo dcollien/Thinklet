@@ -43,7 +43,7 @@ class App extends core.App
 		
 		@disectionNode = new DisectionNode( )
 		
-		@verticalPanEnabled = true
+		@verticalPanEnabled = false
 		@timeSnapEnabled = false
 	
 	updateColors: ->
@@ -144,7 +144,7 @@ class App extends core.App
 		else
 			@setDeviation channel, 1, true
 		
-
+	
 	setDeviation: (channel, deviation, auto = false) ->
 		@curves[channel].autoDeviation = auto
 		@curves[channel].deviationThreshold = deviation
