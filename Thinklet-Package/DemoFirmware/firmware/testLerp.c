@@ -66,7 +66,7 @@ typedef struct channelLerp {
 } channelLerp_t;
 
 
-void brenthamInit( channelLerp_t *channel ) {
+void bresenhamInit( channelLerp_t *channel ) {
 
 	if ( channel->x0 < channel->x1 ) {
 		channel->dx = channel->x1 - channel->x0;
@@ -87,7 +87,7 @@ void brenthamInit( channelLerp_t *channel ) {
 	channel->err = channel->dx - channel->dy;
 }
 
-void brenthamIteration( channelLerp_t *channel ) {
+void bresenhamIteration( channelLerp_t *channel ) {
 	int16_t e2 = channel->err << 1;
 
 	if ( e2 > -channel->dy ) {
@@ -116,7 +116,7 @@ void startChannelLerp( channelLerp_t *channel ) {
 	channel->x1 = channel->wave[channel->waveIndex+1];
 	channel->y1 = channel->wave[channel->waveIndex+2];
 
-	brenthamInit( channel );
+	bresenhamInit( channel );
 
 	channel->first = TRUE;
 
@@ -132,7 +132,7 @@ uint8_t lerpStepChannel( channelLerp_t *channel ) {
 
 	// skip over all brightnesses which are in the same time step
 	while ( channel->x_prev == channel->x0 ) {
-		brenthamIteration( channel );
+		bresenhamIteration( channel );
 
 		if ( channel->x0 == channel->x1 && channel->y0 == channel->y1 ) {
 			channel->done = TRUE;
