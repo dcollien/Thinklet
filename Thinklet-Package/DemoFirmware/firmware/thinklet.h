@@ -1,9 +1,3 @@
-/* Name: thinklet.h
- * Author: Icy Labs Pty. Ltd.
- * Copyright: (c) 2012 Icy Labs Pty. Ltd.
- * License: Internal Use Only. Open Source Licensing TBA
- */
-
 #include <avr/io.h>
 #include <util/delay.h>
 #include <avr/interrupt.h>

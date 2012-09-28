@@ -1,6 +1,6 @@
-/* Name: sine_fader.c
- * Author: Icy Labs Pty. Ltd.
- * Copyright: (c) 2012 Icy Labs Pty. Ltd.
+/* Name: thinklet test firmware
+ * Author: David
+ * Copyright: Whatever
  * License: Internal Use Only. Open Source Licensing TBA
  */
 

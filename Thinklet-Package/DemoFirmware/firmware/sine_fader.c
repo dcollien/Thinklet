@@ -1,9 +1,3 @@
-/* Name: sine_fader.c
- * Author: Icy Labs Pty. Ltd.
- * Copyright: (c) 2012 Icy Labs Pty. Ltd.
- * License: Internal Use Only. Open Source Licensing TBA
- */
-
 #include "thinklet.h"
 #include <avr/pgmspace.h>
 
