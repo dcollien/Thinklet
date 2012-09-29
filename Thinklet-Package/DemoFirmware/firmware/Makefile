@@ -14,8 +14,8 @@
 #                is connected.
 # FUSES ........ Parameters for avrdude to flash the fuses appropriately.
 
-DEVICE     = attiny13
-CLOCK      = 9600000
+DEVICE     = attiny85
+CLOCK      = 16500000
 PROGRAMMER = -B 250 -c dragon_isp -P usb
 OBJECTS    = main.o
 FUSES      = -U hfuse:w:0xFF:m -U lfuse:w:0x7A:m
@@ -28,7 +28,7 @@ FUSES      = -U hfuse:w:0xFF:m -U lfuse:w:0x7A:m
 # Tune the lines below only if you know what you are doing:
 
 AVRDUDE = avrdude $(PROGRAMMER) -p $(DEVICE)
-COMPILE = avr-gcc -Wall -Os -DF_CPU=$(CLOCK) -mmcu=$(DEVICE)
+COMPILE = avr-gcc -Wall -Wno-main -Os -DF_CPU=$(CLOCK) -mmcu=$(DEVICE)
 
 # symbolic targets:
 all:	main.hex
