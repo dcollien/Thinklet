@@ -127,6 +127,8 @@ core.key =
    SHIFT: 16
    CTRL: 17
    ALT: 18
+   BACKSPACE: 8
+   DELETE: 46
    
 ascii = (c) -> c.charCodeAt 0
 

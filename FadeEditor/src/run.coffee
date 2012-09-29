@@ -31,6 +31,8 @@ run = ->
    core.input.bind core.key.SHIFT, 'push'
    core.input.bind core.key.CTRL, 'precision'
    core.input.bind core.key.X, 'snapX'
+   core.input.bind core.key.DELETE, 'delete'
+   core.input.bind core.key.BACKSPACE, 'delete'
 
    app = new App( )
    app.run( )
@@ -74,6 +76,85 @@ run = ->
             </div>"
       return titles
    
+   $('#precision-button').mouseover ->
+      $('#status-bar').text 'Toggle "Click to Place" Mode'
+   $('#precision-button').mouseout ->
+      $('#status-bar').text ''
+
+   $('#push-button').mouseover ->
+      $('#status-bar').text 'Toggle "Shift Channel" Mode'
+   $('#push-button').mouseout ->
+      $('#status-bar').text ''
+
+   $('#pushall-button').mouseover ->
+      $('#status-bar').text 'Toggle "Shift All Channels" Mode'
+   $('#pushall-button').mouseout ->
+      $('#status-bar').text ''
+
+   $('#precision-button').click ->
+      icon = $(this).find('img')
+         
+      if (icon.attr 'src') is './media/crosshair.png'
+         icon.attr 'src', './media/crosshair_white.png'
+      else
+         icon.attr 'src', './media/crosshair.png'
+
+      $(this).toggleClass "button-selected"
+      app.togglePrecisionMode()
+      app.invalidate( )
+      return true
+
+   shiftChannelDisable = ->
+      button = $('#push-button')
+      icon = button.find('img')
+      icon.attr 'src', './media/resize_white.png'
+      button.removeClass "button-selected"
+   shiftChannelEnable = ->
+      button = $('#push-button')
+      icon = button.find('img')
+      icon.attr 'src', './media/resize.png'
+      button.addClass "button-selected"
+
+   shiftAllDisable = ->
+      button = $('#pushall-button')
+      icon = button.find('img')
+      icon.attr 'src', './media/double-resize_white.png'
+      button.removeClass "button-selected"
+   shiftAllEnable = ->
+      button = $('#pushall-button')
+      icon = button.find('img')
+      icon.attr 'src', './media/double-resize.png'
+      button.addClass "button-selected"
+
+   $('#push-button').click ->
+      icon = $(this).find('img')
+         
+      if (icon.attr 'src') is './media/resize.png'
+         shiftChannelDisable()
+         app.disableShiftChannelMode()
+      else
+         shiftChannelEnable()
+         shiftAllDisable()
+         app.enableShiftChannelMode()
+
+      
+      app.invalidate( )
+      return true
+
+   $('#pushall-button').click ->
+      icon = $(this).find('img')
+         
+      if (icon.attr 'src') is './media/double-resize.png'
+         shiftAllDisable()
+         app.disableShiftMode()
+      else
+         shiftAllEnable()
+         shiftChannelDisable()
+         app.enableShiftMode()
+
+      app.invalidate( )
+      return true
+
    $('.curveTitles').html makeTitles( )
    
    $('#colorchooser').modal {backdrop: false, show:false}
@@ -138,6 +219,9 @@ run = ->
       repeatButton = $('#repeat-button' + i)
       repeatButton.data { index: i }
       
+      repeatButton.mouseover -> $('#status-bar').text 'Toggle Channel ' + $(this).data( ).index + ' Repeat'
+      repeatButton.mouseout -> $('#status-bar').text ''
+
       repeatButton.click ->
          index = $(this).data( ).index
          icon = $('#repeat-icon' + index)
@@ -146,9 +230,13 @@ run = ->
          app.toggleChannelRepeat index
          app.invalidate( )
          return true
-         
+
       settingsButton = $('#settings-button' + i)
       settingsButton.data { index: i }
+
+      settingsButton.mouseover -> $('#status-bar').text 'Channel ' + $(this).data( ).index + ' Settings'
+      settingsButton.mouseout -> $('#status-bar').text ''
+
       settingsButton.click ->
          activeSettingsChannel = $(this).data( ).index
          $('#channel-settings').modal "show"
@@ -157,6 +245,10 @@ run = ->
       
       colorbox = $('#colorbox' + i)
       colorbox.data { index: i }
+
+      colorbox.mouseover -> $('#status-bar').text 'Change Channel ' + $(this).data( ).index + ' Color'
+      colorbox.mouseout -> $('#status-bar').text ''
+
       colorbox.click ->
          activeColorBox = $(this)
          $.farbtastic('#farbtastic').setColor (new RGBColor(activeColorBox.css 'background-color').toHex( ))

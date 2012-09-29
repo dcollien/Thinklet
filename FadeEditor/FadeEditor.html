@@ -26,6 +26,7 @@
 	padding: 0;
 	
 	overflow-y: auto;
+	overflow-x: hidden;
 	
 	background-color: #000;
 }
@@ -153,7 +154,7 @@ body {
 	padding: 0px;
 }
 
-.button-icon :hover {
+.button-x :hover {
 	background-color: #444;
 }
 
@@ -175,23 +176,37 @@ body {
 }
 
 </style>
-<div class="navbar navbar-fixed-top">
-  <div class="navbar-inner">
+<div class="navbar navbar-fixed-top" style="border-bottom: 1px solid #333; height: 32px !important;">
+  <div class="navbar-inner" style="height: 32px !important;">
     <div class="container">
-      <a class="brand" href="#">Thinklet Waveformer</a>
+      <a class="brand" href="#" style="padding-top: 6px">Thinklet Waveformer</a>
       <div class="nav-collapse">
         <ul class="nav">
-          <li><a data-toggle="modal" href="#how-to">How do I use this?</a></li>
-		  <li><a data-toggle="modal" href="#settings">Settings</a></li>
-          <li><a data-toggle="modal" href="#lights">Lights</a></li>
-          <li><a data-toggle="modal" href="#debug-info">Compile Debug Stuff</a></li>
+          <!--<li><a data-toggle="modal" href="#how-to" style="padding-top: 8px">How do I use this?</a></li>-->
+		  <li><a data-toggle="modal" href="#settings" style="padding-top: 8px">Settings</a></li>
+          <li><a data-toggle="modal" href="#lights" style="padding-top: 8px">Lights</a></li>
+          <li><a data-toggle="modal" href="#debug-info" style="padding-top: 8px">Compile Debug Stuff</a></li>
         </ul>
       </div><!--/.nav-collapse -->
     </div>
   </div>
 </div>
 
-<div style="height:40px;background-color:red"></div>
+<div style="height:54px;background-color:#0c0c0c; border-bottom: 1px solid #333">
+	<span style="display: inline-block; margin-top: 35px; margin-left: 68px;">
+		<span class="button-icon" id="precision-button" style="display: inline-block; float: left; margin-left: 3px;">
+			<img src="./media/crosshair_white.png">
+		</span>
+		<span class="button-icon" id="push-button" style="display: inline-block; float: left; margin-left: 3px;">
+			<img src="./media/resize_white.png">
+		</span>
+		<span class="button-icon" id="pushall-button" style="display: inline-block; float: left; margin-left: 3px;">
+			<img src="./media/double-resize_white.png">
+		</span>
+		<span id="status-bar" style="margin-left: 20px; color: #ccc; font-weight: 200">
+		</span>
+	</span>
+</div>
 
 <div class="centerbox flexbox container">
 	<div style="height:100%;width:100%;">

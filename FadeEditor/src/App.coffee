@@ -60,9 +60,11 @@ class App extends core.App
          diff = v.sub mouse, @pushDrag
          @pushDrag = mouse
          for curve in @curves
-            if core.input.down 'precision'
+            if @pushAll
+               # stretch all waveforms
                curve.stretch mouse.x, diff.x
             else if mouse.y > curve.topOffset and mouse.y < curve.topOffset + curve.height
+               # stretch the active waveform
                curve.stretch mouse.x, diff.x
                break
          
@@ -164,7 +166,39 @@ class App extends core.App
    
    toggleChannelRepeat: (channel) ->
       @curves[channel].repeats = !@curves[channel].repeats
-      
+
+   enableShiftChannelMode: ->
+      @currentCursor = 'ew-resize'
+      $(canvas).css 'cursor', @currentCursor
+      @pushMode = true
+      @pushAll = false
+      @invalidate( )
+
+   disableShiftChannelMode: ->
+      @currentCursor = 'auto'
+      $(canvas).css 'cursor', @currentCursor
+      @pushMode = false
+      @invalidate( )
+
+   enableShiftMode: ->
+      @enableShiftChannelMode()
+      @pushAll = true
+
+   disableShiftMode: ->
+      @disableShiftChannelMode()
+      @pushAll = false
+
+
+   togglePrecisionMode: ->
+      if not @precisionMode
+         @precisionMode = true
+         @currentCursor = 'crosshair'
+         $(canvas).css 'cursor', @currentCursor
+      else
+         @precisionMode = false
+         @currentCursor = 'auto'
+         $(canvas).css 'cursor', @currentCursor
+
    setEndpointLock: (channel, lock) ->
       curve = @curves[channel]
       curve.endpointLock = lock
@@ -175,25 +209,32 @@ class App extends core.App
       
    update:( dt ) ->
       
-      mouse = v.sub core.canvasMouse( ), @pan
-         
+      mouse = v.sub core.canvasMouse( ), @pan   
+      $canvas = $(canvas)
+      
       if core.input.pressed 'push'
-         $canvas = $(canvas)
-         $canvas.css 'cursor', 'ew-resize'
+         @currentCursor = 'ew-resize'
+         $(canvas).css 'cursor', @currentCursor
          @pushMode = true
          @invalidate( )
       else if core.input.released 'push'
-         $(canvas).css 'cursor', 'auto'
+         @currentCursor = 'auto'
+         $(canvas).css 'cursor', @currentCursor
          @pushMode = false
          @invalidate( )
       if not core.input.down 'push'
          @prevPushCursor = null
          
       if core.input.pressed 'precision'
-         $canvas = $(canvas)
-         $canvas.css 'cursor', 'crosshair'
+         @precisionMode = true
+         @currentCursor = 'crosshair'
+         $(canvas).css 'cursor', @currentCursor
       else if core.input.released 'precision'
-         $(canvas).css 'cursor', 'auto'
+         @precisionMode = false
+         @currentCursor = 'auto'
+         $(canvas).css 'cursor', @currentCursor
+
+
       
       ledIndex = 0
       for curve in @curves
@@ -259,10 +300,10 @@ class App extends core.App
          
          @resetDrag( )
          
-         if core.input.down 'push'
+         if @pushMode
             @pushDrag = mouse
             @pushStart = mouse
-         else if core.input.down 'precision'
+         else if @precisionMode
             @createNode( )
          else
             for curve in @curves
@@ -278,15 +319,38 @@ class App extends core.App
                      
             if not @dragNode and not @dragControl
                if @disectionNode.isUnderMouse @pan
+                  # creating a node
                   @createNode( )
                else
+                  # start dragging background
+                  $(canvas).css 'cursor', 'url(media/closedhand.cur), pointer'
+                  
                   @dragPan = v core.canvasMouse( )
                   @scrollStart = core.screenMouse( ).y
-            
+
       # stop dragging   
       if core.input.released 'left-mouse'
+         if not @currentCursor?
+            @currentCursor = 'auto'
+
+         $(canvas).css 'cursor', @currentCursor
          @resetDrag( )
-      
+
+      # delete
+      node = null
+      if core.input.pressed 'delete'
+         for curve in @curves
+            node = curve.nodeAtMouse @pan
+            break if node
+
+         if node
+            try
+               node.remove()
+            catch err
+               if console
+                  console.log err
+
+      node = null
       # right click
       if core.input.pressed 'right-mouse'
          for curve in @curves
