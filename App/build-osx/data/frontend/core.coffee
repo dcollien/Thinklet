@@ -129,6 +129,7 @@ core.key =
    ALT: 18
    BACKSPACE: 8
    DELETE: 46
+   COMMAND: 91
    
 ascii = (c) -> c.charCodeAt 0
 

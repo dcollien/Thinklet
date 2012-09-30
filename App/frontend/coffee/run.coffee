@@ -30,6 +30,7 @@ run = ->
    core.input.bind core.key.K, 'keyframe'
    core.input.bind core.key.SHIFT, 'push'
    core.input.bind core.key.CTRL, 'precision'
+   core.input.bind core.key.COMMAND, 'precision'
    core.input.bind core.key.X, 'snapX'
    core.input.bind core.key.DELETE, 'delete'
    core.input.bind core.key.BACKSPACE, 'delete'
@@ -91,18 +92,26 @@ run = ->
    $('#pushall-button').mouseout ->
       $('#status-bar').text ''
 
-   $('#precision-button').click ->
-      icon = $(this).find('img')
-         
-      if (icon.attr 'src') is './media/crosshair.png'
-         icon.attr 'src', './media/crosshair_white.png'
-      else
-         icon.attr 'src', './media/crosshair.png'
+   $('#settings-button').mouseover ->
+      $('#status-bar').text 'Editor Settings'
+   $('#settings-button').mouseout ->
+      $('#status-bar').text ''
 
-      $(this).toggleClass "button-selected"
-      app.togglePrecisionMode()
-      app.invalidate( )
-      return true
+   $('#compile-button').mouseover ->
+      $('#status-bar').text 'Compilation Stuff'
+   $('#compile-button').mouseout ->
+      $('#status-bar').text ''
+
+   precisionDisable = ->
+      button = $('#precision-button')
+      icon = button.find('img')
+      icon.attr 'src', './media/crosshair_white.png'
+      button.removeClass "button-selected"
+   precisionEnable = ->
+      button = $('#precision-button')
+      icon = button.find('img')
+      icon.attr 'src', './media/crosshair.png'
+      button.addClass "button-selected"
 
    shiftChannelDisable = ->
       button = $('#push-button')
@@ -126,31 +135,66 @@ run = ->
       icon.attr 'src', './media/double-resize.png'
       button.addClass "button-selected"
 
+   disableAll = ->
+      shiftAllDisable()
+      shiftChannelDisable()
+      precisionDisable()
+
+   app.toolChangeHandler = (tool) ->
+      switch tool
+         when 'pointer'
+            disableAll()
+
+         when 'placement'
+            disableAll()
+            precisionEnable()
+
+         when 'shift'
+            disableAll()
+            shiftChannelEnable()
+
+         when 'shiftAll'
+            disableAll()
+            shiftAllEnable()
+
+   $('#precision-button').click ->
+      icon = $(this).find('img')
+      isActive = (icon.attr 'src') is './media/crosshair.png'
+
+      disableAll()
+      if isActive
+         app.changeTool 'pointer'
+      else
+         precisionEnable()
+         app.changeTool 'placement'
+      
+      app.invalidate( )
+      return true
+
    $('#push-button').click ->
       icon = $(this).find('img')
-         
-      if (icon.attr 'src') is './media/resize.png'
-         shiftChannelDisable()
-         app.disableShiftChannelMode()
+      isActive = (icon.attr 'src') is './media/resize.png'
+
+      disableAll()
+      if isActive
+         app.changeTool 'pointer'
       else
          shiftChannelEnable()
-         shiftAllDisable()
-         app.enableShiftChannelMode()
+         app.changeTool 'shift'
 
-      
       app.invalidate( )
       return true
 
    $('#pushall-button').click ->
       icon = $(this).find('img')
-         
-      if (icon.attr 'src') is './media/double-resize.png'
-         shiftAllDisable()
-         app.disableShiftMode()
+      isActive = (icon.attr 'src') is './media/double-resize.png'
+
+      disableAll()
+      if isActive
+         app.changeTool 'pointer'
       else
          shiftAllEnable()
-         shiftChannelDisable()
-         app.enableShiftMode()
+         app.changeTool 'shiftAll'
 
       app.invalidate( )
       return true
@@ -330,6 +374,6 @@ run = ->
    $('.dialogModal').draggable( )
    
    # menu items
-   $('#compile-button').click ->
+   $('#do-compile-button').click ->
       $('#compile-output').val compiler.compile app.curves
       return true

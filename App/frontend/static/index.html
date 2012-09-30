@@ -152,6 +152,7 @@ body {
 	border: 1px solid #666;
 	text-align: center;
 	padding: 0px;
+	background-color: black;
 }
 
 .button-x :hover {
@@ -169,31 +170,30 @@ body {
 .led {
 	display: inline-block;
 	margin-left: 3px;
-	border-radius: 100px;
+	border-radius: 20px;
 	border: 1px solid black;
-	width: 32px;
-	height: 32px;
+	width: 16px;
+	height: 16px;
 }
 
 </style>
-<div class="navbar navbar-fixed-top" style="border-bottom: 1px solid #333; height: 32px !important;">
-  <div class="navbar-inner" style="height: 32px !important;">
-    <div class="container">
-      <a class="brand" href="#" style="padding-top: 6px">Thinklet Waveformer</a>
-      <div class="nav-collapse">
-        <ul class="nav">
-          <!--<li><a data-toggle="modal" href="#how-to" style="padding-top: 8px">How do I use this?</a></li>-->
-		  <li><a data-toggle="modal" href="#settings" style="padding-top: 8px">Settings</a></li>
-          <li><a data-toggle="modal" href="#lights" style="padding-top: 8px">Lights</a></li>
-          <li><a data-toggle="modal" href="#debug-info" style="padding-top: 8px">Compile Debug Stuff</a></li>
-        </ul>
-      </div><!--/.nav-collapse -->
-    </div>
-  </div>
-</div>
 
-<div style="height:54px;background-color:#0c0c0c; border-bottom: 1px solid #333">
-	<span style="display: inline-block; margin-top: 35px; margin-left: 68px;">
+<div style="height:24px;background-color:#141414; border-bottom: 1px solid #333">
+	<span style="display: inline-block; margin-top: 4px; margin-left: 68px; width: 90%">
+		<span id="led-display" style="display: inline-block; position: absolute; right: 10px">
+			<div class="led" id="led0"></div>
+
+			<div class="led" id="led1"></div>
+
+			<div class="led" id="led2"></div>
+
+			<div class="led" id="led3"></div>
+
+			<div class="led" id="led4"></div>
+
+			<div class="led" id="led5"></div>
+		</span>
+
 		<span class="button-icon" id="precision-button" style="display: inline-block; float: left; margin-left: 3px;">
 			<img src="./media/crosshair_white.png">
 		</span>
@@ -203,8 +203,28 @@ body {
 		<span class="button-icon" id="pushall-button" style="display: inline-block; float: left; margin-left: 3px;">
 			<img src="./media/double-resize_white.png">
 		</span>
+
+		<span style="display: inline-block; float: left; margin-left: 3px;">&nbsp;</span>
+
+		<span class="button-icon" id="settings-button" style="display: inline-block; float: left; margin-left: 3px;">
+			<a data-toggle="modal" href="#settings">
+				<i class="icon-cog icon-white"></i>
+			</a>
+		</span>
+
+		<span class="button-icon" id="compile-button" style="display: inline-block; float: left; margin-left: 3px;">
+			<a data-toggle="modal" href="#debug-info">
+				<i class="icon-arrow-right icon-white"></i>
+			</a>
+		</span>
+
+		<span style="display: inline-block; float: left; margin-left: 3px;">&nbsp</span>
+
 		<span id="status-bar" style="margin-left: 20px; color: #ccc; font-weight: 200">
 		</span>
+
+
+
 	</span>
 </div>
 
@@ -256,7 +276,7 @@ body {
 	</div>
 	<div class="modal-body">
 		<div class="padding:10px">
-			<div class="btn btn-primary" id="compile-button">Do Clever Things</div>
+			<div class="btn btn-primary" id="do-compile-button">Do Clever Things</div>
 			<br/><br/>
 			<textarea id="compile-output" style="width:100%;height:300px">
 			</textarea>
@@ -272,28 +292,6 @@ body {
   </div>
   <div class="modal-body">
     <div id="farbtastic"></div>
-  </div>
-  </center>
-</div>
-
-<div class="modal hide dialogModal" id="lights">
-  <center>
-  <div class="modal-header dialogHeader">
-    <a class="close" data-dismiss="modal" data-target="#lights">&times;</a>
-    <h3 class="dialogHeader">Lights</h3>
-  </div>
-  <div class="modal-body">
-	<div class="led" id="led0"></div>
-	
-	<div class="led" id="led1"></div>
-	
-	<div class="led" id="led2"></div>
-	
-	<div class="led" id="led3"></div>
-	
-	<div class="led" id="led4"></div>
-	
-	<div class="led" id="led5"></div>
   </div>
   </center>
 </div>
