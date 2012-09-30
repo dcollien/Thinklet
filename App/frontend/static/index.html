@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<link rel="stylesheet" href="bootstrap/css/bootstrap.min.css" type="text/css" media="screen" charset="utf-8">
+<link rel="stylesheet" href="farbtastic/farbtastic.css" type="text/css" />
+<style>
+.flexbox {
+	display: -webkit-box;
+	-webkit-box-orient: horizontal;
+	-webkit-box-pack: center;
+	-webkit-box-align: center;
+	
+	display: -moz-box;
+	-moz-box-orient: horizontal;
+	-moz-box-pack: center;
+	-moz-box-align: center;
+
+	display: box;
+	box-orient: horizontal;
+	box-pack: center;
+	box-align: center;
+}
+
+.centerbox {
+	width: 100%;
+	height: 100%;
+	margin: 0;
+	padding: 0;
+	
+	overflow-y: auto;
+	overflow-x: hidden;
+	
+	background-color: #000;
+}
+.curveTitles {
+	float: left;
+	padding-top: 16px;
+	padding-bottom: 16px;
+	
+	width: 64px;
+	height: 100%;
+	
+	margin: 0px;
+	
+	font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+	color: #aaa;
+	font-weight: bold;
+}
+
+.curveTitle {
+	height: 288px;
+	padding-left: 4px;
+}
+
+
+
+body, html { width: 100%; height: 100%; padding: 0; margin: 0; overflow: hidden }
+canvas {
+	border-left: 1px solid #666;
+	margin-left: -1px;
+}
+body {
+	background-color: #000;
+}
+
+.context-menu {
+	position: absolute;
+	background-color: #333;
+	color: #eee;
+	border: 1px solid #666;
+	border-radius: 0px 10px 10px 10px;
+	padding: 6px;
+	
+	opacity: 0.9;
+	-moz-opacity: 0.9;
+	filter:alpha(opacity=90);
+}
+
+.menu-item {
+	cursor: pointer;
+	margin-left: 1px;
+	padding-left: 5px;
+	padding-right: 5px;
+	border-radius: 5px;
+}
+
+.menu-item:hover {
+	background-color: #ccc;
+}
+
+.menu-text {
+	color: #eee;
+}
+
+.menu-item:hover .menu-text {
+	color: #444;
+}
+
+.menu-box {
+	position: absolute;
+	top: 10px;
+	left: 10px;
+	padding: 5px;
+}
+
+.canvasContainer {
+	height:100%;
+	width:100%;
+}
+
+.colorbox {
+	display: block;
+	width: 14px;
+	height: 14px;
+	margin: 1px;
+	border-radius: 2px;
+}
+
+.colorbox:hover {
+	opacity:0.8;
+}
+
+.dialogHeader {
+	font-weight: 300;
+	color: #eee;
+	border-color: #555;
+	background-color: #444;
+}
+
+.dialogHeader .close {
+	color: white;
+}
+
+.dialogModal {
+	background-color: #333;
+	color: #ccc;
+	border-color: #555;
+}
+
+.dialogModal .modal-footer {
+	background-color: #444;
+	border-color: #555;
+}
+
+#colorchooser {
+	width: 320px;
+}
+
+.button-icon {
+	width: 16px;
+	height: 16px;
+	border-radius: 4px;
+	display:block;
+	border: 1px solid #666;
+	text-align: center;
+	padding: 0px;
+}
+
+.button-x :hover {
+	background-color: #444;
+}
+
+.button-selected {
+	background-color: #eee;
+}
+
+.button-selected :hover {
+	background-color: #fff;
+}
+
+.led {
+	display: inline-block;
+	margin-left: 3px;
+	border-radius: 100px;
+	border: 1px solid black;
+	width: 32px;
+	height: 32px;
+}
+
+</style>
+<div class="navbar navbar-fixed-top" style="border-bottom: 1px solid #333; height: 32px !important;">
+  <div class="navbar-inner" style="height: 32px !important;">
+    <div class="container">
+      <a class="brand" href="#" style="padding-top: 6px">Thinklet Waveformer</a>
+      <div class="nav-collapse">
+        <ul class="nav">
+          <!--<li><a data-toggle="modal" href="#how-to" style="padding-top: 8px">How do I use this?</a></li>-->
+		  <li><a data-toggle="modal" href="#settings" style="padding-top: 8px">Settings</a></li>
+          <li><a data-toggle="modal" href="#lights" style="padding-top: 8px">Lights</a></li>
+          <li><a data-toggle="modal" href="#debug-info" style="padding-top: 8px">Compile Debug Stuff</a></li>
+        </ul>
+      </div><!--/.nav-collapse -->
+    </div>
+  </div>
+</div>
+
+<div style="height:54px;background-color:#0c0c0c; border-bottom: 1px solid #333">
+	<span style="display: inline-block; margin-top: 35px; margin-left: 68px;">
+		<span class="button-icon" id="precision-button" style="display: inline-block; float: left; margin-left: 3px;">
+			<img src="./media/crosshair_white.png">
+		</span>
+		<span class="button-icon" id="push-button" style="display: inline-block; float: left; margin-left: 3px;">
+			<img src="./media/resize_white.png">
+		</span>
+		<span class="button-icon" id="pushall-button" style="display: inline-block; float: left; margin-left: 3px;">
+			<img src="./media/double-resize_white.png">
+		</span>
+		<span id="status-bar" style="margin-left: 20px; color: #ccc; font-weight: 200">
+		</span>
+	</span>
+</div>
+
+<div class="centerbox flexbox container">
+	<div style="height:100%;width:100%;">
+		<div class="curveTitles">
+		</div>
+		<div class="canvasContainer">
+			<canvas></canvas>
+		</div>
+	</div>
+</div>
+<div class="context-menu hide">
+	<ul class="nav nav-list">
+		<li class="menu-item" id="item-smooth-node" style="list-style:disc;color:#0f0"><span class="menu-text">Smooth</span></li>
+		<li class="menu-item" id="item-symmetric-node" style="list-style:disc;color:#f0f"><span class="menu-text">Symmetric</span></li>
+		<li class="menu-item" id="item-sharp-node" style="list-style:square;color:#f00"><span class="menu-text">Sharp</span></li>
+		<li class="menu-item" id="item-flat-node" style="list-style:square;color:#ff0"><span class="menu-text">Flat</span></li>
+		<li class="menu-item" id="item-remove-node" style="list-style-image: url('media/remove.png');"><span class="menu-text">Remove</span></li>
+		<li class="menu-item" id="item-reset-node" style="list-style:circle;color:#ccc"><span class="menu-text">Reset</span></li>
+	</ul>
+</div>
+
+<div class="modal hide dialogModal" id="how-to">
+	<div class="modal-header dialogHeader">
+	<a class="close" data-dismiss="modal">&times;</a>
+	<h3 class="dialogHeader">What Does What</h3>
+	</div>
+	<div class="modal-body">
+		<div class="help-content" style="overflow:auto; height: 320px">
+			<em>Dragging the Curve:</em> <dd>Create more detail with a new node</dd><br/>
+			<em>Right-clicking a Node:</em> <dd>Change the type, reset or remove the node</dd><br/>
+			<em>Dragging the Backdrop:</em> <dd>Pan/scroll the view</dd><br/>
+			<hr/>
+			<em>Holding <b>Ctrl</b> and Clicking:</em> <dd>Create new nodes</dd><br/>
+			<em>Holding <b>Shift</b> and Dragging:</em> <dd>Stretch/compress the curve</dd><br/>
+			<em>Holding <b>Ctrl+Shift</b> and Dragging:</em> <dd>Stretch/compress all curves</dd><br/>
+			<hr/>
+			<em>Holding <b>K</b>:</em> <dd>View optimised keyframes</dd><br/>
+			<em>Holding <b>X</b>:</em> <dd>Toggle snapping to the grid lines when moving nodes on the horizontal axis</dd><br/>
+		</div>
+	</div>
+</div>
+
+<div class="modal hide" id="debug-info">
+	<div class="modal-header">
+	<a class="close" data-dismiss="modal">&times;</a>
+	<h3>Compile Debug</h3>
+	</div>
+	<div class="modal-body">
+		<div class="padding:10px">
+			<div class="btn btn-primary" id="compile-button">Do Clever Things</div>
+			<br/><br/>
+			<textarea id="compile-output" style="width:100%;height:300px">
+			</textarea>
+		</div>
+	</div>
+</div>
+
+<div class="modal hide dialogModal" id="colorchooser">
+  <center>
+  <div class="modal-header dialogHeader">
+    <a class="close" data-dismiss="modal" data-target="#colorchooser">&times;</a>
+    <h3 class="dialogHeader">Channel Display Color</h3>
+  </div>
+  <div class="modal-body">
+    <div id="farbtastic"></div>
+  </div>
+  </center>
+</div>
+
+<div class="modal hide dialogModal" id="lights">
+  <center>
+  <div class="modal-header dialogHeader">
+    <a class="close" data-dismiss="modal" data-target="#lights">&times;</a>
+    <h3 class="dialogHeader">Lights</h3>
+  </div>
+  <div class="modal-body">
+	<div class="led" id="led0"></div>
+	
+	<div class="led" id="led1"></div>
+	
+	<div class="led" id="led2"></div>
+	
+	<div class="led" id="led3"></div>
+	
+	<div class="led" id="led4"></div>
+	
+	<div class="led" id="led5"></div>
+  </div>
+  </center>
+</div>
+
+<div class="modal hide dialogModal" id="channel-settings">
+  <center>
+  <div class="modal-header dialogHeader">
+    <a class="close" data-dismiss="modal" data-target="#channel-settings">&times;</a>
+    <h3 class="dialogHeader">Channel Settings</h3>
+  </div>
+  </center>
+
+  <div class="modal-body">
+	<form class="well form-horizontal">
+		<label class="checkbox">
+	    	<input type="checkbox" id="channel-enabled" checked> Enabled
+	 	</label>
+		<label class="checkbox">
+	    	<input type="checkbox" id="channel-gamma" checked> Correct for Gamma
+	 	</label>
+		<label class="checkbox">
+	    	<input type="checkbox" id="channel-lock-endpoints"> Lock first and last node together
+	 	</label>
+		<div class="control-group">
+		   <label class="control-label" for="setting-time-per-bar">Optimisation level <br/>(maximum deviation from the curve)</label>
+		   <div class="controls">
+		     <select id="channel-deviation">
+			   <option value="auto" selected>Auto</option>
+			   <option value="1">1</option>
+			   <option value="2">2</option>
+		       <option value="4">4</option>
+		       <option value="8">8</option>
+		       <option value="16">16</option>
+		     </select>
+		   </div>
+		 </div>
+	</form>
+  </div>
+</div>
+
+
+<div class="modal hide dialogModal" id="settings">
+  <center>
+  <div class="modal-header dialogHeader">
+    <a class="close" data-dismiss="modal" data-target="#settings">&times;</a>
+    <h3 class="dialogHeader">Editor Settings</h3>
+  </div>
+  </center>
+
+  <div class="modal-body">
+	<form class="well form-horizontal">
+		<label class="checkbox">
+			<input type="checkbox" id="setting-snap"> Snap to grid on the time axis
+		</label>
+		
+		<label class="checkbox">
+			<input type="checkbox" id="setting-vpan"> Enable vertical panning on drag
+		</label>
+
+		<div class="control-group">
+		   <label class="control-label" for="setting-time-per-bar">Time per Bar</label>
+		   <div class="controls">
+		     <select id="setting-time-per-bar">
+		       <option value="0.125">1/8th Second</option>
+			   <option value="0.5">1/2 Second</option>
+		       <option value="1" selected>1 Second</option>
+		       <option value="5">5 Seconds</option>
+		       <option value="10">10 Seconds</option>
+		       <option value="30">30 Seconds</option>
+		       <option value="60">60 Seconds</option>
+		       <option value="120">2 Minutes</option>
+		     </select>
+		   </div>
+		 </div>
+	</form>
+  </div>
+</div>
+
+
+
+<script src="jquery.js"></script>
+<script src="jquery-ui.js"></script>
+<script src="bootstrap/js/bootstrap.min.js"></script>
+<script src="farbtastic/farbtastic.js"></script>
+<script src="rgbcolor.js"></script>
+<script src="core.js"></script>
+<script src="math.js"></script>
+<script src="app.js"></script>
+<script>
+run( );
+</script>
