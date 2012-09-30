@@ -1,7 +1,17 @@
-# TODO: multi pattern
 class App extends core.App
    constructor: ->
       super( )
+
+      @tool = 'pointer'
+
+      @cursors = {
+         'pointer': 'auto',
+         'shift': 'ew-resize',
+         'shiftAll': 'ew-resize',
+         'placement': 'crosshair',
+         'pan': 'url(media/openhand.cur), pointer'
+         'panDrag': 'url(media/closedhand.cur), pointer'
+      }
       
       @scrollBox = $('.centerbox')
       @gridSize = 8
@@ -39,12 +49,19 @@ class App extends core.App
       
       @pushDrag = null
       @pushStart = null
-      @pushMode = false
-      
-      @disectionNode = new DisectionNode( )
+
+      @disectionNode = new DisectionNode()
       
       @verticalPanEnabled = false
       @timeSnapEnabled = false
+
+   changeTool: (tool) ->
+      @tool = tool
+      $(canvas).css 'cursor', @cursors[@tool]
+      @invalidate( )
+
+      if @toolChangeHandler?
+         @toolChangeHandler @tool
    
    updateColors: ->
       for i in [0...(@curves.length)]
@@ -60,7 +77,7 @@ class App extends core.App
          diff = v.sub mouse, @pushDrag
          @pushDrag = mouse
          for curve in @curves
-            if @pushAll
+            if (@tool is 'shiftAll')
                # stretch all waveforms
                curve.stretch mouse.x, diff.x
             else if mouse.y > curve.topOffset and mouse.y < curve.topOffset + curve.height
@@ -167,38 +184,6 @@ class App extends core.App
    toggleChannelRepeat: (channel) ->
       @curves[channel].repeats = !@curves[channel].repeats
 
-   enableShiftChannelMode: ->
-      @currentCursor = 'ew-resize'
-      $(canvas).css 'cursor', @currentCursor
-      @pushMode = true
-      @pushAll = false
-      @invalidate( )
-
-   disableShiftChannelMode: ->
-      @currentCursor = 'auto'
-      $(canvas).css 'cursor', @currentCursor
-      @pushMode = false
-      @invalidate( )
-
-   enableShiftMode: ->
-      @enableShiftChannelMode()
-      @pushAll = true
-
-   disableShiftMode: ->
-      @disableShiftChannelMode()
-      @pushAll = false
-
-
-   togglePrecisionMode: ->
-      if not @precisionMode
-         @precisionMode = true
-         @currentCursor = 'crosshair'
-         $(canvas).css 'cursor', @currentCursor
-      else
-         @precisionMode = false
-         @currentCursor = 'auto'
-         $(canvas).css 'cursor', @currentCursor
-
    setEndpointLock: (channel, lock) ->
       curve = @curves[channel]
       curve.endpointLock = lock
@@ -213,48 +198,42 @@ class App extends core.App
       $canvas = $(canvas)
       
       if core.input.pressed 'push'
-         @currentCursor = 'ew-resize'
-         $(canvas).css 'cursor', @currentCursor
-         @pushMode = true
-         @invalidate( )
+         @changeTool 'shift'
       else if core.input.released 'push'
-         @currentCursor = 'auto'
-         $(canvas).css 'cursor', @currentCursor
-         @pushMode = false
-         @invalidate( )
-      if not core.input.down 'push'
-         @prevPushCursor = null
+         @changeTool 'pointer'
          
       if core.input.pressed 'precision'
-         @precisionMode = true
-         @currentCursor = 'crosshair'
-         $(canvas).css 'cursor', @currentCursor
+         @changeTool 'placement'
       else if core.input.released 'precision'
-         @precisionMode = false
-         @currentCursor = 'auto'
-         $(canvas).css 'cursor', @currentCursor
-
-
+         @changeTool 'pointer'
       
+
       ledIndex = 0
       for curve in @curves
          if mouse.y >= curve.topOffset and mouse.y <= curve.topOffset + curve.height
             @disectionNode.move mouse.x, curve.firstNode
+
             if @lastMouse and @disectionNode.coord and not v.eq mouse, @lastMouse
-               led = $('#led' + ledIndex)
-               ledData = led.data( )
-               
-               if ledData
-                  color = new RGBColor( led.data( ).color )
-                  intensity = 1 - (@disectionNode.coord.y - curve.topOffset)/curve.height
-                  # TODO: all channels at once
-                  color.r = Math.floor (color.r * intensity)
-                  color.g = Math.floor (color.g * intensity)
-                  color.b = Math.floor (color.b * intensity)
-                  
-                  led.css 'background-color', color.toRGB( )
-               
-               @invalidate( ) 
+               @invalidate( )
+
+
+         curveDisection = new DisectionNode()
+         curveDisection.move mouse.x, curve.firstNode
+
+         led = $('#led' + ledIndex)
+         ledData = led.data( )
+         
+         if ledData and curveDisection.coord
+            color = new RGBColor( led.data( ).color )
+            intensity = 1 - (curveDisection.coord.y - curve.topOffset)/curve.height
+            
+            color.r = Math.floor (color.r * intensity)
+            color.g = Math.floor (color.g * intensity)
+            color.b = Math.floor (color.b * intensity)
+            
+            led.css 'background-color', color.toRGB( )
+         
+
          ledIndex += 1
       
       if core.input.pressed 'keyframe'
@@ -300,12 +279,13 @@ class App extends core.App
          
          @resetDrag( )
          
-         if @pushMode
+         if (@tool is 'shift') or (@tool is 'shiftAll')
             @pushDrag = mouse
             @pushStart = mouse
-         else if @precisionMode
+         else if (@tool is 'placement')
             @createNode( )
          else
+            # look for node or control point to drag
             for curve in @curves
                @dragNode = curve.nodeAtMouse @pan
                if @dragNode
@@ -323,17 +303,14 @@ class App extends core.App
                   @createNode( )
                else
                   # start dragging background
-                  $(canvas).css 'cursor', 'url(media/closedhand.cur), pointer'
-                  
+                  @changeTool 'panDrag'
                   @dragPan = v core.canvasMouse( )
                   @scrollStart = core.screenMouse( ).y
 
       # stop dragging   
       if core.input.released 'left-mouse'
-         if not @currentCursor?
-            @currentCursor = 'auto'
-
-         $(canvas).css 'cursor', @currentCursor
+         if @tool is 'panDrag'
+            @changeTool 'pointer'
          @resetDrag( )
 
       # delete
@@ -509,21 +486,32 @@ class App extends core.App
       ctx.restore( )
       
       
-      if @pushMode
+      if (@tool is 'shift') or (@tool is 'shiftAll')
          point = core.canvasMouse( )
          # draw stretch bar
 
          ctx.strokeStyle = "rgb(224,224,224)"
          ctx.fillStyle = "rgba(224,224,224,0.06)"
-         
+
+         curveGap = (@curveSpacing + @curveHeight)
+
+         if (@tool is 'shift')
+            channel = Math.floor(point.y / curveGap)
+            y = channel * curveGap
+            height = y + curveGap
+         else
+            y = 0
+            height = @height
+
          if @pushStart
             ctx.beginPath( )
-            ctx.fillRect @width, 0, point.x - @width, @height
+            ctx.fillRect @width, y, point.x - @width, height
          
          ctx.beginPath( )
-         ctx.moveTo point.x, 0
-         ctx.lineTo point.x, @height
+         ctx.moveTo point.x, y
+         ctx.lineTo point.x, height
          ctx.stroke( )
+
          
       
       ctx.save( )
