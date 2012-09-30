@@ -323,6 +323,7 @@ class App extends core.App
          if node
             try
                node.remove()
+               @invalidate()
             catch err
                if console
                   console.log err
