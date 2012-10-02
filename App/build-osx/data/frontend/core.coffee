@@ -44,6 +44,9 @@ core.input = {
       @mouse = core.toCanvas { x: e.pageX, y: e.pageY }
    onmousedown: (e) -> @onkeydown(e)
    onmouseup: (e) -> @onkeyup(e)
+   ondblclick: (e) ->
+      @onkeydown e
+      @onkeyup e
    onmousewheel: (e) ->
       @onkeydown e
       @onkeyup e
@@ -114,6 +117,7 @@ core.button =
    RIGHT: -3
    WHEELDOWN: -4
    WHEELUP: -5
+   DBLCLICK: -6
    
 core.key =
    TAB: 9
@@ -149,6 +153,8 @@ core.eventCode = (e) ->
          core.button.WHEELUP
       else
          core.button.WHEELDOWN
+   else if e.type == 'dblclick'
+      core.button.DBLCLICK
 
 # TODO, multicanvas: put this in App class
 core.canvas = document.getElementsByTagName('canvas')[0]
@@ -163,6 +169,7 @@ core.canvas.oncontextmenu = core.input.oncontextmenu.bind core.input
 document.onkeydown = core.input.onkeydown.bind core.input
 document.onkeyup = core.input.onkeyup.bind core.input
 document.onmouseup = core.input.onmouseup.bind core.input
+document.ondblclick = core.input.ondblclick.bind core.input
 
 requestAnimationFrame = window.requestAnimationFrame or
    window.webkitRequestAnimationFrame or

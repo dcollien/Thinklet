@@ -27,6 +27,7 @@ run = ->
    core.input.bind core.key.DOWN_ARROW, 'pan-down'
    core.input.bind core.button.RIGHT, 'right-mouse'
    core.input.bind core.button.LEFT, 'left-mouse'
+   core.input.bind core.button.DBLCLICK, 'double-click'
    core.input.bind core.key.K, 'keyframe'
    core.input.bind core.key.SHIFT, 'push'
    core.input.bind core.key.CTRL, 'precision'
@@ -77,30 +78,26 @@ run = ->
             </div>"
       return titles
    
-   $('#precision-button').mouseover ->
-      $('#status-bar').text 'Toggle "Click to Place" Mode'
-   $('#precision-button').mouseout ->
-      $('#status-bar').text ''
-
-   $('#push-button').mouseover ->
-      $('#status-bar').text 'Toggle "Shift Channel" Mode'
-   $('#push-button').mouseout ->
-      $('#status-bar').text ''
-
-   $('#pushall-button').mouseover ->
-      $('#status-bar').text 'Toggle "Shift All Channels" Mode'
-   $('#pushall-button').mouseout ->
-      $('#status-bar').text ''
-
-   $('#settings-button').mouseover ->
-      $('#status-bar').text 'Editor Settings'
-   $('#settings-button').mouseout ->
-      $('#status-bar').text ''
-
-   $('#compile-button').mouseover ->
-      $('#status-bar').text 'Compilation Stuff'
-   $('#compile-button').mouseout ->
-      $('#status-bar').text ''
+   # horizontal scrolling support
+   document.body.addEventListener 'mousewheel', (event)->
+      console.log('scrollwheel: ' + event.wheelDeltaX)
+      app.pan.x += event.wheelDeltaX
+      app.pan.x = app.maxPanX if app.pan.x > app.maxPanX
+      
+      app.invalidate()
+      true
+   
+   # generate hover handlers to place text in status bar
+   setStatusBar = (status)->
+      (event)->
+         $('#status-bar').text(if event.type is 'mouseenter' then status else '')
+      
+   
+   $('#precision-button').hover setStatusBar 'Toggle "Click to Place" Mode'
+   $('#push-button').hover setStatusBar 'Toggle "Shift Channel" Mode'
+   $('#pushall-button').hover setStatusBar 'Toggle "Shift All Channels" Mode'
+   $('#settings-button').hover setStatusBar 'Editor Settings'
+   $('#compile-button').hover setStatusBar 'Compilation Stuff'
 
    precisionDisable = ->
       button = $('#precision-button')
