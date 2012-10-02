@@ -80,7 +80,6 @@ run = ->
    
    # horizontal scrolling support
    document.body.addEventListener 'mousewheel', (event)->
-      console.log('scrollwheel: ' + event.wheelDeltaX)
       app.pan.x += event.wheelDeltaX
       app.pan.x = app.maxPanX if app.pan.x > app.maxPanX
       
