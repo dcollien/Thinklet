@@ -31,8 +31,27 @@ macro do_loop( void );
 #define pin_toggle( pin ) (PORTB ^= bit(pin))
 
 //// wait loops
+
 // delay a number of microseconds - or as close as we can get
-#define wait_us(microseconds) _delay_loop_2(((microseconds) * (F_CPU / 100000)) / 40)
+#if F_CPU == 16500000
+	// special version to deal with half-mhz speed. in a resolution of 2us increments, rounded up
+	// this loop has been tuned empirically with an oscilloscope and works in avr-gcc 4.5.1
+	macro wait_us(int microseconds) {
+		while (microseconds > 1) {
+			// 16 nops
+			asm("NOP");asm("NOP");asm("NOP");asm("NOP");asm("NOP");asm("NOP");asm("NOP");asm("NOP");
+			asm("NOP");asm("NOP");asm("NOP");asm("NOP");asm("NOP");asm("NOP");asm("NOP");asm("NOP");
+			// 16 nops
+			asm("NOP");asm("NOP");asm("NOP");asm("NOP");asm("NOP");asm("NOP");asm("NOP");asm("NOP");
+			asm("NOP");asm("NOP");asm("NOP");
+
+
+			microseconds -= 2;
+		}
+	}
+#else
+	#define wait_us(microseconds) _delay_loop_2(((microseconds) * (F_CPU / 100000)) / 40)
+#endif
 
 // delay in milliseconds - a custom implementation to avoid util/delay's tendancy to import floating point math libraries
 macro wait_ms(unsigned int ms) {
